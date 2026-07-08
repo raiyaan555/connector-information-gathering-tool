@@ -1,0 +1,578 @@
+@if (loading()) {
+  <app-loading-spinner />
+} @else if (project(); as p) {
+  <div class="workspace">
+    <div class="doc-note">
+      <mat-icon>info_outline</mat-icon>
+      <div>
+        <strong>Note:</strong> Text shown in <span class="sample-text">blue</span> is sample text from the requirement document.
+        Please replace it with your application details before submission.
+      </div>
+    </div>
+
+    <header class="workspace__header card">
+      <div class="workspace__header-left">
+        <a [routerLink]="['/project', projectId]" class="back-link">
+          <mat-icon>arrow_back</mat-icon>
+          Back to Document Workspace
+        </a>
+        <div>
+          <h1>{{ p.name }}</h1>
+          <p>{{ p.clientName }} · {{ p.applicationName }}</p>
+        </div>
+      </div>
+      <div class="workspace__header-right">
+        <div class="autosave">
+          <span class="autosave__label">Last Saved</span>
+          <strong>{{ lastSavedLabel() }}</strong>
+          @if (draftSaved()) {
+            <span class="autosave__badge">✓ Draft Saved</span>
+          }
+        </div>
+        <div class="completion">
+          <span>Overall Completion</span>
+          <strong>{{ completionPercent() }}%</strong>
+          <mat-progress-bar mode="determinate" [value]="completionPercent()" />
+        </div>
+      </div>
+    </header>
+
+    <div class="section-status card">
+      @for (section of sections; track section.key) {
+        <button type="button" class="section-pill" (click)="goToStep(section.step)">
+          {{ section.label }}
+        </button>
+      }
+    </div>
+
+    <mat-card class="stepper-card">
+      <form [formGroup]="form">
+        <mat-stepper #stepper>
+        <mat-step [stepControl]="form">
+            <div class="step-content two-col">
+              <h2 class="full-row">About the Application</h2>
+              <p class="step-desc full-row">This section describes about the application.</p>
+
+              <mat-form-field appearance="outline" class="full-row">
+                <mat-label>What does this application do?</mat-label>
+                <textarea matInput formControlName="applicationPurpose" rows="3"></textarea>
+                <mat-hint class="sample-hint">{{ hints['applicationPurpose'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="field-block full-row">
+                <label class="field-label">Will this application be the Source of Truth (SOT)?</label>
+                <app-sample-hint [text]="hints['isSourceOfTruth']" />
+                <mat-radio-group formControlName="isSourceOfTruth" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+
+              <div class="field-block full-row">
+                <label class="field-label">Do we have the UAT environment to build/test/freeze the connectors?</label>
+                <app-sample-hint [text]="hints['hasUatEnvironment']" />
+                <mat-radio-group formControlName="hasUatEnvironment" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+
+              @if (form.get('hasUatEnvironment')?.value === 'yes') {
+                <mat-form-field appearance="outline">
+                  <mat-label>Server</mat-label>
+                  <input matInput formControlName="uatServer" />
+                  <mat-hint class="sample-hint">{{ hints['uatServer'] }}</mat-hint>
+                </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>Username</mat-label>
+                  <input matInput formControlName="uatUsername" />
+                  <mat-hint class="sample-hint">{{ hints['uatUsername'] }}</mat-hint>
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="full-row">
+                  <mat-label>Password</mat-label>
+                  <input matInput type="password" formControlName="uatPassword" />
+                  <mat-hint class="sample-hint">{{ hints['uatPassword'] }}</mat-hint>
+                </mat-form-field>
+              }
+
+              <mat-form-field appearance="outline">
+                <mat-label>What type of application is it?</mat-label>
+                <mat-select formControlName="applicationType">
+                  @for (type of applicationTypes; track type) {
+                    <mat-option [value]="type">{{ type }}</mat-option>
+                  }
+                </mat-select>
+                <mat-hint class="sample-hint">{{ hints['applicationType'] }}</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>How do we connect to this application?</mat-label>
+                <input matInput formControlName="connectionMethod" />
+                <mat-hint class="sample-hint">{{ hints['connectionMethod'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="field-block full-row">
+                <label class="field-label">Is this a legacy application or web application?</label>
+                <app-sample-hint [text]="hints['isLegacyApplication']" />
+                <mat-radio-group formControlName="isLegacyApplication" class="radio-group">
+                  <mat-radio-button value="legacy">Legacy Application</mat-radio-button>
+                  <mat-radio-button value="web">Web Application</mat-radio-button>
+                </mat-radio-group>
+              </div>
+
+              <mat-form-field appearance="outline" class="full-row">
+                <mat-label>Legacy / Client Details</mat-label>
+                <textarea matInput formControlName="legacyDetails" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['legacyDetails'] }}</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content two-col">
+              <h2 class="full-row">Application Integration Details (Lifecycle)</h2>
+              <p class="step-desc full-row">This section describes about the integration details required while marrying with CI.</p>
+
+              <div class="field-block full-row">
+                <label class="field-label">Which all features of life-cycle management will be required for integration?</label>
+                <app-sample-hint [text]="hints['lifecycleFeatures']" />
+                <div class="checkbox-group">
+                  @for (feature of lifecycleOptions; track feature) {
+                    <mat-checkbox [checked]="isLifecycleSelected(feature)" (change)="onLifecycleChange(feature, $event.checked)">{{ feature }}</mat-checkbox>
+                  }
+                </div>
+              </div>
+
+              <div class="field-block">
+                <label class="field-label">Is user required to be on-boarded on the application?</label>
+                <p class="field-help">By on-boarding the user we are giving the capability to create the user on this application (JOINER)</p>
+                <mat-radio-group formControlName="userOnboardingRequired" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+              <mat-form-field appearance="outline">
+                <mat-label>On-boarding Details</mat-label>
+                <textarea matInput formControlName="userOnboardingDetails" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['userOnboardingDetails'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="field-block">
+                <label class="field-label">Is user required to be modified on the application?</label>
+                <p class="field-help">By modifying the user we offer the capability to change user details and roles/entitlements (MOVER)</p>
+                <mat-radio-group formControlName="userModificationRequired" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+              <mat-form-field appearance="outline">
+                <mat-label>Modification Details</mat-label>
+                <textarea matInput formControlName="userModificationDetails" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['userModificationDetails'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="field-block">
+                <label class="field-label">Is user deletion required on the application?</label>
+                <p class="field-help">By deleting the user we offer the capability to remove the user from the application (LEAVER)</p>
+                <mat-radio-group formControlName="userDeletionRequired" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+              <mat-form-field appearance="outline">
+                <mat-label>Deletion Details</mat-label>
+                <textarea matInput formControlName="userDeletionDetails" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['userDeletionDetails'] }}</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Is the removal of user a soft delete or hard delete?</mat-label>
+                <mat-select formControlName="deleteType">
+                  <mat-option value="soft">Soft Delete</mat-option>
+                  <mat-option value="hard">Hard Delete</mat-option>
+                </mat-select>
+                <mat-hint class="sample-hint">{{ hints['deleteType'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="field-block">
+                <label class="field-label">Is the user required to be reactivated?</label>
+                <p class="field-help">By reactivating the user we offer the capability to revive the user into the application</p>
+                <mat-radio-group formControlName="userReactivationRequired" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+              <mat-form-field appearance="outline">
+                <mat-label>Reactivation Method</mat-label>
+                <textarea matInput formControlName="reactivationMethod" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['reactivationMethod'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="field-block">
+                <label class="field-label">Will there be SSO?</label>
+                <mat-radio-group formControlName="ssoRequired" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+              <mat-form-field appearance="outline">
+                <mat-label>What type of SSO will be used for this application?</mat-label>
+                <input matInput formControlName="ssoType" />
+                <mat-hint class="sample-hint">{{ hints['ssoType'] }}</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>What is the recon strategy that will be used for this application?</mat-label>
+                <input matInput formControlName="reconStrategy" />
+                <mat-hint class="sample-hint">{{ hints['reconStrategy'] }}</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>While creating a user, does that user need to be assigned to some default entitlement?</mat-label>
+                <input matInput formControlName="defaultEntitlement" />
+                <mat-hint class="sample-hint">{{ hints['defaultEntitlement'] }}</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>While reconciliation are the active users &amp; the disable users coming in the same request?</mat-label>
+                <mat-select formControlName="reconUserTypes">
+                  <mat-option value="same">Same Request</mat-option>
+                  <mat-option value="different">Different Requests</mat-option>
+                </mat-select>
+                <mat-hint class="sample-hint">{{ hints['reconUserTypes'] }}</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Will the user be assigned to multiple types of entitlements or only one type?</mat-label>
+                <mat-select formControlName="entitlementTypes">
+                  <mat-option value="single">Single Type</mat-option>
+                  <mat-option value="multiple">Multiple Types</mat-option>
+                </mat-select>
+                <mat-hint class="sample-hint">{{ hints['entitlementTypes'] }}</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content two-col">
+              <h2 class="full-row">Converged Identity Details</h2>
+              <p class="step-desc full-row">This section describes the relation of CI with the application that is getting integrated.</p>
+              <mat-form-field appearance="outline">
+                <mat-label>Which CI Package will be getting implemented?</mat-label>
+                <input matInput formControlName="ciPackage" />
+                <mat-hint class="sample-hint">{{ hints['ciPackage'] }}</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>How will it relate to the CI once integrated?</mat-label>
+                <mat-select formControlName="ciIntegrationRole">
+                  <mat-option value="sot">Source of Truth (SOT)</mat-option>
+                  <mat-option value="target">Target Application</mat-option>
+                  <mat-option value="both">Both</mat-option>
+                </mat-select>
+                <mat-hint class="sample-hint">{{ hints['ciIntegrationRole'] }}</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="full-row">
+                <mat-label>Module Diagram of integration of this application with CI</mat-label>
+                <textarea matInput formControlName="moduleDiagramNotes" rows="4"></textarea>
+                <mat-hint class="sample-hint">{{ hints['moduleDiagramNotes'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="module-diagram-upload full-row">
+                <input
+                  type="file"
+                  #moduleDiagramInput
+                  hidden
+                  accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                  (change)="onModuleDiagramSelected($event)"
+                />
+                <button mat-stroked-button type="button" (click)="moduleDiagramInput.click()">
+                  <mat-icon>image</mat-icon>
+                  Upload PNG/JPEG
+                </button>
+                @if (moduleDiagramImage(); as img) {
+                  <div class="module-diagram-upload__info">
+                    <span>{{ img.name }}</span>
+                    <button mat-icon-button type="button" (click)="previewFile(img)" [disabled]="!img.objectUrl" aria-label="Preview module diagram">
+                      <mat-icon>visibility</mat-icon>
+                    </button>
+                    <button mat-icon-button type="button" (click)="removeFileByReference(img)" aria-label="Remove module diagram">
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content two-col">
+              <h2 class="full-row">Source of Truth Details</h2>
+              <p class="step-desc full-row">This section describes the details required for the Source of truth.</p>
+              <mat-form-field appearance="outline">
+                <mat-label>What is the SOT on-boarding strategy that will be used?</mat-label>
+                <input matInput formControlName="sotOnboardingStrategy" />
+                <mat-hint class="sample-hint">{{ hints['sotOnboardingStrategy'] }}</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>What is the on-boarding scan that will be configured?</mat-label>
+                <textarea matInput formControlName="onboardingScan" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['onboardingScan'] }}</mat-hint>
+              </mat-form-field>
+              <div class="field-block full-row">
+                <label class="field-label">What are the attributes of the SOT that will be used for this application?</label>
+                <app-sample-hint [text]="hints['sotAttributes']" />
+                <div class="checkbox-group">
+                  @for (attr of sotAttributes; track attr) {
+                    <mat-checkbox [checked]="isSotAttributeSelected(attr)" (change)="onSotAttributeChange(attr, $event.checked)">{{ attr }}</mat-checkbox>
+                  }
+                </div>
+              </div>
+              <mat-form-field appearance="outline" class="full-row">
+                <mat-label>Additional SOT Attributes</mat-label>
+                <input matInput formControlName="additionalSotAttributes" />
+                <mat-hint class="sample-hint">{{ hints['additionalSotAttributes'] }}</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content two-col">
+              <h2 class="full-row">Encryption Details</h2>
+              <p class="step-desc full-row">This section talks about any encryption involved in the application integration.</p>
+              <mat-form-field appearance="outline">
+                <mat-label>Which fields of the user details are encrypted?</mat-label>
+                <textarea matInput formControlName="encryptedFields" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['encryptedFields'] }}</mat-hint>
+              </mat-form-field>
+              <div class="field-block">
+                <label class="field-label">Are the api payloads encrypted?</label>
+                <app-sample-hint [text]="hints['apiPayloadEncrypted']" />
+                <mat-radio-group formControlName="apiPayloadEncrypted" class="radio-group">
+                  <mat-radio-button value="yes">Yes</mat-radio-button>
+                  <mat-radio-button value="no">No</mat-radio-button>
+                </mat-radio-group>
+              </div>
+              <mat-form-field appearance="outline">
+                <mat-label>Which fields of the user details are encoded?</mat-label>
+                <textarea matInput formControlName="encodedFields" rows="2"></textarea>
+                <mat-hint class="sample-hint">{{ hints['encodedFields'] }}</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Is there any specific standard encryption algorithm used?</mat-label>
+                <input matInput formControlName="encryptionAlgorithm" />
+                <mat-hint class="sample-hint">{{ hints['encryptionAlgorithm'] }}</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content two-col">
+              <h2 class="full-row">General Points</h2>
+              <p class="step-desc full-row">This section describes about the general points to be answered/considered while integrating with CI.</p>
+              <div class="field-block full-row">
+                <label class="field-label">Attach the postman collection of all the apis</label>
+                <app-sample-hint [text]="hints['postmanCollection']" />
+              </div>
+              <div class="field-block full-row">
+                <label class="field-label">APIs along with the screenshots of the API Response</label>
+                <app-sample-hint [text]="hints['apiScreenshots']" />
+              </div>
+              <mat-form-field appearance="outline" class="full-row">
+                <mat-label>Attach the api documentation for the collection</mat-label>
+                <input matInput formControlName="apiDocumentationLink" />
+                <mat-hint class="sample-hint">{{ hints['apiDocumentationLink'] }}</mat-hint>
+              </mat-form-field>
+
+              <div class="upload-area full-row">
+                <input
+                  type="file"
+                  #generalFileInput
+                  hidden
+                  multiple
+                  (change)="onFileSelected($event)"
+                  [accept]="allowedTypes"
+                />
+                <button mat-stroked-button type="button" (click)="generalFileInput.click()">
+                  <mat-icon>upload_file</mat-icon>
+                  Upload Docs / Screenshots
+                </button>
+
+                <p class="upload-area__note">
+                  Uploaded files will be managed under the <strong>Attachments</strong> section.
+                </p>
+
+                @if (files().length) {
+                  <p class="upload-area__count">
+                    {{"Files added"}}: <strong>{{ files().length }}</strong>
+                  </p>
+                  <button mat-button type="button" class="upload-area__goto" (click)="goToStep(7)">
+                    Go to Attachments
+                  </button>
+                }
+              </div>
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content">
+              <h2>Special Comments (If Any)</h2>
+              <mat-form-field appearance="outline" class="full-row">
+                <mat-label>Special Comments</mat-label>
+                <textarea matInput formControlName="specialComments" rows="8"></textarea>
+                <mat-hint class="sample-hint">{{ hints['specialComments'] }}</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content">
+              <h2>Attachments</h2>
+              <p class="step-desc">Upload Postman collections, API documentation, module diagrams, screenshots, and any supporting files.</p>
+              <app-sample-hint [text]="hints['postmanCollection'] + ' · ' + hints['apiScreenshots']" />
+              <div class="upload-area">
+                <input type="file" #fileInput hidden multiple (change)="onFileSelected($event)" [accept]="allowedTypes" />
+                <button mat-stroked-button type="button" (click)="fileInput.click()">
+                  <mat-icon>upload_file</mat-icon>
+                  Upload Files
+                </button>
+              </div>
+              @if (files().length) {
+                <table mat-table [dataSource]="files()" class="file-table">
+                  <ng-container matColumnDef="name">
+                    <th mat-header-cell *matHeaderCellDef>File Name</th>
+                    <td mat-cell *matCellDef="let f">{{ f.name }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="type">
+                    <th mat-header-cell *matHeaderCellDef>File Type</th>
+                    <td mat-cell *matCellDef="let f">{{ f.type }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="size">
+                    <th mat-header-cell *matHeaderCellDef>File Size</th>
+                    <td mat-cell *matCellDef="let f">{{ formatSize(f.size) }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="uploadedAt">
+                    <th mat-header-cell *matHeaderCellDef>Upload Time</th>
+                    <td mat-cell *matCellDef="let f">{{ f.uploadedAt | date: 'medium' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="actions">
+                    <th mat-header-cell *matHeaderCellDef></th>
+                    <td mat-cell *matCellDef="let f; let i = index">
+                      <button
+                        mat-icon-button
+                        type="button"
+                        (click)="previewFile(f)"
+                        [disabled]="!f.objectUrl"
+                        aria-label="Preview"
+                      >
+                        <mat-icon>visibility</mat-icon>
+                      </button>
+
+                      <button
+                        mat-icon-button
+                        type="button"
+                        (click)="downloadFile(f)"
+                        [disabled]="!f.objectUrl"
+                        aria-label="Download"
+                      >
+                        <mat-icon>download</mat-icon>
+                      </button>
+
+                      <button mat-icon-button type="button" (click)="removeFile(i)" aria-label="Remove">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </td>
+                  </ng-container>
+                  <tr mat-header-row *matHeaderRowDef="fileColumns"></tr>
+                  <tr mat-row *matRowDef="let row; columns: fileColumns"></tr>
+                </table>
+              }
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-flat-button type="button" color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+        <mat-step [stepControl]="form">
+            <div class="step-content">
+              <h2>Review &amp; Generate</h2>
+              <mat-accordion multi>
+                @for (section of sections; track section.key) {
+                  @if (section.key !== 'review') {
+                    <mat-expansion-panel>
+                      <mat-expansion-panel-header>
+                        <mat-panel-title>{{ section.label }}</mat-panel-title>
+                        <mat-panel-description>
+                          <button mat-button type="button" (click)="$event.stopPropagation(); goToStep(section.step)">Edit</button>
+                        </mat-panel-description>
+                      </mat-expansion-panel-header>
+                      <div class="review-grid">
+                        @for (entry of form.getRawValue() | keyvalue; track entry.key) {
+                          @if (entry.value) {
+                            <div class="review-item">
+                              <label>{{ entry.key }}</label>
+                              <span>{{ entry.value }}</span>
+                            </div>
+                          }
+                        }
+                      </div>
+                    </mat-expansion-panel>
+                  }
+                }
+              </mat-accordion>
+              @if (files().length) {
+                <h3>Attachments ({{ files().length }})</h3>
+                <ul>
+                  @for (f of files(); track f.name) {
+                    <li>{{ f.name }}</li>
+                  }
+                </ul>
+              }
+            </div>
+            <div class="step-actions">
+              <button mat-button type="button" matStepperPrevious>Previous</button>
+              <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
+              <button mat-stroked-button type="button" (click)="generatePpt()">Generate PPT</button>
+              <button mat-stroked-button type="button" (click)="generateWord()">Generate Word</button>
+              <button mat-stroked-button type="button" (click)="generatePdf()">Generate PDF</button>
+              <button mat-flat-button color="primary" type="button" (click)="reviewAndSave()">Review &amp; Save</button>
+            </div>
+          </mat-step>
+        </mat-stepper>
+      </form>
+    </mat-card>
+  </div>
+}

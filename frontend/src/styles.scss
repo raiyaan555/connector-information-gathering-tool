@@ -1,0 +1,74 @@
+@use '@angular/material' as mat;
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Montserrat,
+    density: 0,
+  ));
+}
+
+:root {
+  --accent-blue: #2563eb;
+  --accent-blue-light: #eff6ff;
+  --text-primary: #1a1a2e;
+  --text-secondary: #6b7280;
+  --border-color: #e8ecf1;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f7fa;
+  --color-background: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-border: #e8ecf1;
+  --color-primary: #2563eb;
+  --color-primary-light: #eff6ff;
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-hover: #f3f4f6;
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #6b7280;
+  --color-error: #dc2626;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+  --radius-md: 8px;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent-blue);
+}
+
+.mat-mdc-snack-bar-container.snackbar-success {
+  --mdc-snackbar-container-color: #16a34a;
+  --mdc-snackbar-supporting-text-color: #fff;
+}
+
+.mat-mdc-snack-bar-container.snackbar-error {
+  --mdc-snackbar-container-color: #dc2626;
+  --mdc-snackbar-supporting-text-color: #fff;
+}
+
+.card {
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-card);
+  background: var(--bg-primary);
+}

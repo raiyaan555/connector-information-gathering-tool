@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "dgSpecHash": "XUd3zM1lc5A=",
+  "success": true,
+  "projectFilePath": "/Users/raiyaan/Downloads/arcon work/Connector Information Gathering Document Project/API/API.csproj",
+  "expectedPackageFiles": [
+    "/var/folders/xt/3hbxj9k17dddxzz_yw3qmsmm0000gn/T/cursor-sandbox-cache/59e7a479b5ef5e560cc7eca1660b09cc/nuget/microsoft.aspnetcore.openapi/10.0.9/microsoft.aspnetcore.openapi.10.0.9.nupkg.sha512",
+    "/var/folders/xt/3hbxj9k17dddxzz_yw3qmsmm0000gn/T/cursor-sandbox-cache/59e7a479b5ef5e560cc7eca1660b09cc/nuget/microsoft.openapi/2.0.0/microsoft.openapi.2.0.0.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1900",
+      "level": "Warning",
+      "message": "Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json.",
+      "projectPath": "/Users/raiyaan/Downloads/arcon work/Connector Information Gathering Document Project/API/API.csproj",
+      "warningLevel": 1,
+      "filePath": "/Users/raiyaan/Downloads/arcon work/Connector Information Gathering Document Project/API/API.csproj",
+      "targetGraphs": []
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+<div class="dashboard">
+  <div class="dashboard__toolbar">
+    <button mat-stroked-button type="button" class="add-client-btn" (click)="addClient()">
+      <mat-icon>add</mat-icon>
+      Add Client
+    </button>
+  </div>
+
+  @if (loading()) {
+    <app-loading-spinner />
+  } @else if (filteredGroups().length === 0) {
+    <div class="dashboard__empty card">
+      <h3>No clients found</h3>
+      <p>Use the <strong>Add Client</strong> button to create your first client container.</p>
+    </div>
+  } @else {
+    <div class="client-list">
+      @for (group of filteredGroups(); track group.client.id) {
+        <app-client-container
+          [client]="group.client"
+          [applications]="group.applications"
+          (addApplication)="addApplication(group.client)"
+          (deleteClient)="confirmDeleteClient(group.client)"
+          (deleteApplication)="confirmDeleteApplication($event)"
+        />
+      }
+    </div>
+  }
+</div>

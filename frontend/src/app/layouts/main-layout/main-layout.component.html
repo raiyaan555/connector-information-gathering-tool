@@ -1,0 +1,34 @@
+<div class="main-layout">
+  <header class="topbar">
+    <a routerLink="/dashboard" class="topbar__logo" aria-label="Go to dashboard">
+      <img src="assets/images/arcon-logo.png" alt="arcon" />
+    </a>
+
+    <div class="topbar__search">
+      <app-search-bar
+        placeholder="Search clients, applications, engineer, status..."
+        [live]="true"
+        (search)="onSearch($event)"
+      />
+    </div>
+
+    <div class="topbar__actions">
+      <div class="user-chip" [title]="userName()">
+        <span class="user-chip__avatar">{{ userInitials() }}</span>
+        <span class="user-chip__name">{{ userName() }}</span>
+      </div>
+      <button mat-stroked-button type="button" (click)="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    @if (loadingService.isLoading()) {
+      <app-loading-spinner [overlay]="true" />
+    }
+    <router-outlet />
+  </main>
+
+  <footer class="app-footer">
+    Copyright © 2024 | arcon | Connector Information Gathering Tool (CIGT) | All Rights Reserved
+  </footer>
+</div>

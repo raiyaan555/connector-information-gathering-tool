@@ -1,0 +1,50 @@
+<div class="module-page">
+  <h2 class="module-title">Clients</h2>
+
+  @if (loading()) {
+    <app-loading-spinner />
+  } @else {
+    <mat-card class="module-card">
+      <table mat-table [dataSource]="clients()" class="clients-table">
+        <ng-container matColumnDef="companyName">
+          <th mat-header-cell *matHeaderCellDef>Company</th>
+          <td mat-cell *matCellDef="let c">{{ c.companyName }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="industry">
+          <th mat-header-cell *matHeaderCellDef>Industry</th>
+          <td mat-cell *matCellDef="let c">{{ c.industry }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="primaryContact">
+          <th mat-header-cell *matHeaderCellDef>Primary Contact</th>
+          <td mat-cell *matCellDef="let c">{{ c.primaryContact }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="email">
+          <th mat-header-cell *matHeaderCellDef>Email</th>
+          <td mat-cell *matCellDef="let c">{{ c.email }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="phone">
+          <th mat-header-cell *matHeaderCellDef>Phone</th>
+          <td mat-cell *matCellDef="let c">{{ c.phone }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="country">
+          <th mat-header-cell *matHeaderCellDef>Country</th>
+          <td mat-cell *matCellDef="let c">{{ c.country }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="createdAt">
+          <th mat-header-cell *matHeaderCellDef>Created</th>
+          <td mat-cell *matCellDef="let c">{{ c.createdAt | date: 'mediumDate' }}</td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+    </mat-card>
+  }
+</div>
+

@@ -1,0 +1,50 @@
+<div class="auth-page">
+  <mat-card class="auth-card">
+    <div class="auth-header">
+      <img src="assets/images/arcon-logo.png" alt="arcon" class="auth-logo" />
+      <h1>Sign In</h1>
+      <p>Connector Information Gathering Tool (CIGT)</p>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Email</mat-label>
+        <input matInput type="email" formControlName="email" placeholder="you@theconnector.com" />
+        @if (form.controls.email.hasError('required') && form.controls.email.touched) {
+          <mat-error>Email is required</mat-error>
+        }
+        @if (form.controls.email.hasError('pattern') && form.controls.email.touched) {
+          <mat-error>Email must end with @theconnector.com</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Password</mat-label>
+        <input matInput [type]="hidePassword() ? 'password' : 'text'" formControlName="password" />
+        <button mat-icon-button matSuffix type="button" (click)="hidePassword.set(!hidePassword())">
+          <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        </button>
+        @if (form.controls.password.hasError('required') && form.controls.password.touched) {
+          <mat-error>Password is required</mat-error>
+        }
+      </mat-form-field>
+
+      <div class="auth-options">
+        <mat-checkbox formControlName="rememberMe">Remember Me</mat-checkbox>
+        <a routerLink="/forgot-password" class="forgot-link">Forgot Password?</a>
+      </div>
+
+      <button mat-flat-button color="primary" class="full-width submit-btn" type="submit" [disabled]="loading()">
+        @if (loading()) {
+          <mat-spinner diameter="20"></mat-spinner>
+        } @else {
+          Sign In
+        }
+      </button>
+    </form>
+
+    <p class="auth-footer">
+      Don't have an account? <a routerLink="/register">Register</a>
+    </p>
+  </mat-card>
+</div>

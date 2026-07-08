@@ -1,0 +1,41 @@
+<a class="client-tile" [routerLink]="['/clients', client().id]" role="link" tabindex="0">
+  <div class="client-tile__header">
+    <h3 class="client-tile__name">{{ client().companyName }}</h3>
+    <div class="client-tile__progress-badge" [style.background-color]="stageColor()">
+      <span class="client-tile__badge-text">{{ Math.round(progress() * 100) }}%</span>
+    </div>
+  </div>
+
+  <div class="client-tile__industry">{{ client().industry }}</div>
+
+  <div class="client-tile__stats">
+    <div class="stat">
+      <div class="stat__label">Applications</div>
+      <div class="stat__value">{{ applicationCount() }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">Pending</div>
+      <div class="stat__value">{{ pendingCount() }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">Completed</div>
+      <div class="stat__value">{{ completedCount() }}</div>
+    </div>
+  </div>
+
+  <div class="client-tile__footer">
+    <span class="client-tile__updated-label">Last Updated</span>
+    <strong class="client-tile__updated-value">{{ lastUpdated() | date: 'mediumDate' }}</strong>
+  </div>
+
+  <div class="client-tile__progress">
+    @for (i of segments(); track i) {
+      <div
+        class="progress-segment"
+        [class.progress-segment--filled]="(i + 1) / progressSegments <= progress()"
+        [style.background-color]="stageColor()"
+      ></div>
+    }
+  </div>
+</a>
+

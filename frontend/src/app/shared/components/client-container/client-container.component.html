@@ -1,0 +1,65 @@
+<section class="client-container">
+  <header class="client-container__header">
+    <div class="client-container__title-block">
+      <h2 class="client-container__name">{{ client().companyName }}</h2>
+      @if (client().industry) {
+        <p class="client-container__industry">{{ client().industry }}</p>
+      }
+    </div>
+    <div class="client-container__header-actions">
+      <button
+        mat-stroked-button
+        type="button"
+        class="icon-action"
+        (click)="addApplication.emit()"
+        aria-label="Add application"
+      >
+        <mat-icon>add</mat-icon>
+        Add Application
+      </button>
+      <button
+        mat-icon-button
+        type="button"
+        class="delete-btn"
+        (click)="deleteClient.emit()"
+        aria-label="Delete client"
+      >
+        <mat-icon>delete_outline</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <div class="client-container__meta">
+    <span>Applications: <strong>{{ applications().length }}</strong></span>
+    <span>Last Updated: <strong>{{ lastUpdated() | date: 'mediumDate' }}</strong></span>
+  </div>
+
+  @if (applications().length === 0) {
+    <div class="client-container__empty">
+      <p>No applications yet. Click <strong>Add Application</strong> to create one.</p>
+    </div>
+  } @else {
+    <ul class="application-list">
+      @for (app of applications(); track app.id) {
+        <li class="application-row">
+          <a class="application-row__link" [routerLink]="['/project', app.id]">
+            <div class="application-row__main">
+              <span class="application-row__name">{{ app.applicationName || app.name }}</span>
+              <span class="application-row__status">{{ app.status }}</span>
+            </div>
+            <span class="application-row__updated">{{ app.updatedAt | date: 'mediumDate' }}</span>
+          </a>
+          <button
+            mat-icon-button
+            type="button"
+            class="delete-btn"
+            (click)="deleteApplication.emit(app)"
+            aria-label="Delete application"
+          >
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+</section>

@@ -1,0 +1,24 @@
+.module-page {
+  padding: 0;
+}
+
+.module-title {
+  margin: 0 0 16px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.module-card {
+  border-radius: 12px !important;
+}
+
+.full-width {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.form-actions {
+  margin-top: 16px;
+}
+

@@ -1,0 +1,18 @@
+<div class="settings-page">
+  <h2 class="settings-title">Settings</h2>
+
+  <mat-card class="settings-card">
+    <div class="settings-row">
+      <div class="settings-row__label">
+        <div class="settings-row__title">Mock Notifications</div>
+        <div class="settings-row__desc">This is a placeholder setting for now.</div>
+      </div>
+      <mat-slide-toggle [(ngModel)]="enableMockNotifications"></mat-slide-toggle>
+    </div>
+
+    <div class="settings-actions">
+      <button mat-flat-button color="primary" (click)="save()">Save</button>
+    </div>
+  </mat-card>
+</div>
+

@@ -1,0 +1,60 @@
+@if (loading()) {
+  <app-loading-spinner />
+} @else if (client(); as c) {
+  <div class="client-details">
+    <h2 class="client-details__title">{{ c.companyName }}</h2>
+    <mat-card class="client-details__card">
+      <div class="client-details__grid">
+        <div class="kv">
+          <div class="kv__k">Industry</div>
+          <div class="kv__v">{{ c.industry }}</div>
+        </div>
+        <div class="kv">
+          <div class="kv__k">Primary Contact</div>
+          <div class="kv__v">{{ c.primaryContact }}</div>
+        </div>
+        <div class="kv">
+          <div class="kv__k">Email</div>
+          <div class="kv__v">{{ c.email }}</div>
+        </div>
+        <div class="kv">
+          <div class="kv__k">Phone</div>
+          <div class="kv__v">{{ c.phone }}</div>
+        </div>
+        <div class="kv">
+          <div class="kv__k">Country</div>
+          <div class="kv__v">{{ c.country }}</div>
+        </div>
+        <div class="kv">
+          <div class="kv__k">Address</div>
+          <div class="kv__v">{{ c.address }}</div>
+        </div>
+      </div>
+    </mat-card>
+
+    <h3 class="section-title">Applications</h3>
+    <mat-card class="apps-card">
+      @if (applications(); as apps) {
+        @if (apps.length) {
+          <mat-list>
+            @for (app of apps; track app.id) {
+              <a class="app-row" [routerLink]="['/applications', app.id]">
+                <div class="app-row__name">{{ app.applicationName }}</div>
+                <div class="app-row__meta">
+                  <span class="app-row__status">{{ app.status }}</span>
+                  <span class="app-row__updated">Updated {{ app.updatedAt | date: 'mediumDate' }}</span>
+                </div>
+                <mat-icon class="app-row__chev">chevron_right</mat-icon>
+              </a>
+            }
+          </mat-list>
+        } @else {
+          <div class="empty-state">No applications yet.</div>
+        }
+      }
+    </mat-card>
+  </div>
+} @else {
+  <div class="empty-state">Client not found.</div>
+}
+

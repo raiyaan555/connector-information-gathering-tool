@@ -1,0 +1,118 @@
+.client-tile {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+
+  border-radius: 12px !important;
+  border: 1px solid var(--border-color, #e8ecf1);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  padding: 18px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+  outline: none;
+
+  &:hover {
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08) !important;
+    transform: translateY(-2px);
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18), 0 10px 28px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.client-tile__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.client-tile__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.client-tile__progress-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.client-tile__badge-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.client-tile__industry {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  font-weight: 600;
+}
+
+.client-tile__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.stat__label {
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+  font-weight: 600;
+}
+
+.stat__value {
+  font-size: 16px;
+  color: var(--text-primary, #1a1a2e);
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.client-tile__footer {
+  margin-top: 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border-color, #e8ecf1);
+  padding-top: 12px;
+}
+
+.client-tile__updated-label {
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+  font-weight: 600;
+}
+
+.client-tile__updated-value {
+  font-size: 12px;
+  color: var(--text-primary, #1a1a2e);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.client-tile__progress {
+  margin-top: 12px;
+  display: flex;
+  gap: 4px;
+}
+
+.progress-segment {
+  width: 8px;
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.progress-segment--filled {
+  background: var(--accent-blue, #2563eb);
+}
+

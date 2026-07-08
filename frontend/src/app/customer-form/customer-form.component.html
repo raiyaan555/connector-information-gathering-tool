@@ -1,0 +1,377 @@
+@if (loading()) {
+  <app-loading-spinner />
+} @else {
+  <div class="customer-form-page">
+    <header class="form-header">
+      <img src="assets/images/arcon-logo.png" alt="arcon" class="form-logo" />
+      <div>
+        <h1>Information Gathering Form</h1>
+        @if (formInfo(); as info) {
+          <p>{{ info.projectName }} · {{ info.clientName }} · {{ info.applicationName }}</p>
+        }
+      </div>
+    </header>
+
+    <mat-card class="stepper-card">
+      <form [formGroup]="form">
+        <mat-stepper linear #stepper>
+          <!-- Step 1: About Application -->
+          <mat-step [stepControl]="form" label="About Application">
+            <div class="step-content">
+              <h2>About the Application</h2>
+              <p class="step-desc">This section describes the application to be integrated.</p>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>What does this application do?</mat-label>
+                <textarea matInput formControlName="applicationPurpose" rows="3"></textarea>
+              </mat-form-field>
+
+              <label class="field-label">Will this application be the Source of Truth (SOT)?</label>
+              <mat-radio-group formControlName="isSourceOfTruth" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+
+              <label class="field-label">Do we have the UAT environment to build/test/freeze the connectors?</label>
+              <mat-radio-group formControlName="hasUatEnvironment" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+
+              @if (form.get('hasUatEnvironment')?.value === 'yes') {
+                <div class="uat-fields">
+                  <mat-form-field appearance="outline"><mat-label>Server</mat-label><input matInput formControlName="uatServer" /></mat-form-field>
+                  <mat-form-field appearance="outline"><mat-label>Username</mat-label><input matInput formControlName="uatUsername" /></mat-form-field>
+                  <mat-form-field appearance="outline"><mat-label>Password</mat-label><input matInput type="password" formControlName="uatPassword" /></mat-form-field>
+                </div>
+              }
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>What type of application is it?</mat-label>
+                <mat-select formControlName="applicationType">
+                  @for (type of applicationTypes; track type) {
+                    <mat-option [value]="type">{{ type }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>How do we connect to this application?</mat-label>
+                <input matInput formControlName="connectionMethod" />
+              </mat-form-field>
+
+              <label class="field-label">Is this a legacy application or web application?</label>
+              <mat-radio-group formControlName="isLegacyApplication" class="radio-group">
+                <mat-radio-button value="legacy">Legacy Application</mat-radio-button>
+                <mat-radio-button value="web">Web Application</mat-radio-button>
+              </mat-radio-group>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Legacy / Client Details</mat-label>
+                <textarea matInput formControlName="legacyDetails" rows="2"></textarea>
+              </mat-form-field>
+            </div>
+            <div class="step-actions"><button mat-flat-button color="primary" matStepperNext>Next</button></div>
+          </mat-step>
+
+          <!-- Step 2: Lifecycle -->
+          <mat-step [stepControl]="form" label="Lifecycle">
+            <div class="step-content">
+              <h2>Application Integration Details (Lifecycle)</h2>
+
+              <label class="field-label">Which lifecycle management features are required?</label>
+              <div class="checkbox-group">
+                @for (feature of lifecycleOptions; track feature) {
+                  <mat-checkbox [checked]="isLifecycleSelected(feature)" (change)="onLifecycleChange(feature, $event.checked)">{{ feature }}</mat-checkbox>
+                }
+              </div>
+
+              <label class="field-label">Is user on-boarding required?</label>
+              <mat-radio-group formControlName="userOnboardingRequired" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>On-boarding Details</mat-label>
+                <textarea matInput formControlName="userOnboardingDetails" rows="2"></textarea>
+              </mat-form-field>
+
+              <label class="field-label">Is user modification required?</label>
+              <mat-radio-group formControlName="userModificationRequired" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Modification Details</mat-label>
+                <textarea matInput formControlName="userModificationDetails" rows="2"></textarea>
+              </mat-form-field>
+
+              <label class="field-label">Is user deletion required?</label>
+              <mat-radio-group formControlName="userDeletionRequired" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Deletion Details</mat-label>
+                <textarea matInput formControlName="userDeletionDetails" rows="2"></textarea>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Soft delete or hard delete?</mat-label>
+                <mat-select formControlName="deleteType">
+                  <mat-option value="soft">Soft Delete</mat-option>
+                  <mat-option value="hard">Hard Delete</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <label class="field-label">Is user reactivation required?</label>
+              <mat-radio-group formControlName="userReactivationRequired" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Reactivation Method</mat-label>
+                <textarea matInput formControlName="reactivationMethod" rows="2"></textarea>
+              </mat-form-field>
+
+              <label class="field-label">Will there be SSO?</label>
+              <mat-radio-group formControlName="ssoRequired" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>SSO Type (SAML, RPA-SSO, etc.)</mat-label>
+                <input matInput formControlName="ssoType" />
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Recon Strategy</mat-label>
+                <input matInput formControlName="reconStrategy" />
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Default Entitlement on User Creation</mat-label>
+                <input matInput formControlName="defaultEntitlement" />
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Active & Disabled Users in Same Request?</mat-label>
+                <mat-select formControlName="reconUserTypes">
+                  <mat-option value="same">Same Request</mat-option>
+                  <mat-option value="different">Different Requests</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Entitlement Types</mat-label>
+                <mat-select formControlName="entitlementTypes">
+                  <mat-option value="single">Single Type</mat-option>
+                  <mat-option value="multiple">Multiple Types</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>Back</button>
+              <button mat-flat-button color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+          <!-- Step 3: Converged Identity -->
+          <mat-step [stepControl]="form" label="Converged Identity">
+            <div class="step-content">
+              <h2>Converged Identity Details</h2>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Which CI Package will be implemented?</mat-label>
+                <input matInput formControlName="ciPackage" />
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>How will it relate to CI once integrated?</mat-label>
+                <mat-select formControlName="ciIntegrationRole">
+                  <mat-option value="sot">Source of Truth (SOT)</mat-option>
+                  <mat-option value="target">Target Application</mat-option>
+                  <mat-option value="both">Both</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Module Diagram Notes</mat-label>
+                <textarea matInput formControlName="moduleDiagramNotes" rows="4"></textarea>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>Back</button>
+              <button mat-flat-button color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+          <!-- Step 4: Source of Truth -->
+          <mat-step [stepControl]="form" label="Source Of Truth">
+            <div class="step-content">
+              <h2>Source of Truth Details</h2>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>SOT On-boarding Strategy</mat-label>
+                <input matInput formControlName="sotOnboardingStrategy" />
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>On-boarding Scan Configuration</mat-label>
+                <textarea matInput formControlName="onboardingScan" rows="2"></textarea>
+              </mat-form-field>
+
+              <label class="field-label">SOT Attributes Required</label>
+              <div class="checkbox-group">
+                @for (attr of sotAttributes; track attr) {
+                  <mat-checkbox [checked]="isSotAttributeSelected(attr)" (change)="onSotAttributeChange(attr, $event.checked)">{{ attr }}</mat-checkbox>
+                }
+              </div>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Additional SOT Attributes</mat-label>
+                <input matInput formControlName="additionalSotAttributes" />
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>Back</button>
+              <button mat-flat-button color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+          <!-- Step 5: Encryption -->
+          <mat-step [stepControl]="form" label="Encryption">
+            <div class="step-content">
+              <h2>Encryption Details</h2>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Which fields of user details are encrypted?</mat-label>
+                <textarea matInput formControlName="encryptedFields" rows="2"></textarea>
+              </mat-form-field>
+
+              <label class="field-label">Are the API payloads encrypted?</label>
+              <mat-radio-group formControlName="apiPayloadEncrypted" class="radio-group">
+                <mat-radio-button value="yes">Yes</mat-radio-button>
+                <mat-radio-button value="no">No</mat-radio-button>
+              </mat-radio-group>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Which fields are encoded?</mat-label>
+                <textarea matInput formControlName="encodedFields" rows="2"></textarea>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Encryption Algorithm</mat-label>
+                <input matInput formControlName="encryptionAlgorithm" />
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>Back</button>
+              <button mat-flat-button color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+          <!-- Step 6: General Information -->
+          <mat-step [stepControl]="form" label="General Information">
+            <div class="step-content">
+              <h2>General Points</h2>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>API Documentation Link</mat-label>
+                <input matInput formControlName="apiDocumentationLink" />
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Special Comments</mat-label>
+                <textarea matInput formControlName="specialComments" rows="4"></textarea>
+              </mat-form-field>
+            </div>
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>Back</button>
+              <button mat-flat-button color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+          <!-- Step 7: Attachments -->
+          <mat-step label="Attachments">
+            <div class="step-content">
+              <h2>Attachments</h2>
+              <p class="step-desc">Upload Swagger JSON/YAML, Postman Collection, PDF, DOCX, PNG, JPEG, or ZIP files.</p>
+              <p class="allowed-types">Allowed: {{ allowedTypes }}</p>
+
+              <div class="upload-area">
+                <input type="file" #fileInput hidden (change)="onFileSelected($event)" [accept]="allowedTypes" />
+                <button mat-stroked-button type="button" (click)="fileInput.click()">
+                  <mat-icon>upload_file</mat-icon>
+                  Choose File
+                </button>
+              </div>
+
+              @if (mockFiles().length) {
+                <table mat-table [dataSource]="mockFiles()" class="file-table">
+                  <ng-container matColumnDef="name">
+                    <th mat-header-cell *matHeaderCellDef>File Name</th>
+                    <td mat-cell *matCellDef="let f">{{ f.name }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="type">
+                    <th mat-header-cell *matHeaderCellDef>Type</th>
+                    <td mat-cell *matCellDef="let f">{{ f.type }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="size">
+                    <th mat-header-cell *matHeaderCellDef>Size</th>
+                    <td mat-cell *matCellDef="let f">{{ formatSize(f.size) }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="uploadedAt">
+                    <th mat-header-cell *matHeaderCellDef>Uploaded</th>
+                    <td mat-cell *matCellDef="let f">{{ f.uploadedAt | date: 'short' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="actions">
+                    <th mat-header-cell *matHeaderCellDef></th>
+                    <td mat-cell *matCellDef="let f; let i = index">
+                      <button mat-icon-button type="button" (click)="removeFile(i)"><mat-icon>delete</mat-icon></button>
+                    </td>
+                  </ng-container>
+                  <tr mat-header-row *matHeaderRowDef="fileColumns"></tr>
+                  <tr mat-row *matRowDef="let row; columns: fileColumns"></tr>
+                </table>
+              }
+            </div>
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>Back</button>
+              <button mat-flat-button color="primary" matStepperNext>Next</button>
+            </div>
+          </mat-step>
+
+          <!-- Step 8: Review -->
+          <mat-step label="Review">
+            <div class="step-content">
+              <h2>Review Your Submission</h2>
+              <div class="review-grid">
+                @for (entry of form.getRawValue() | keyvalue; track entry.key) {
+                  @if (entry.value) {
+                    <div class="review-item">
+                      <label>{{ entry.key }}</label>
+                      <span>{{ entry.value }}</span>
+                    </div>
+                  }
+                }
+              </div>
+              @if (mockFiles().length) {
+                <h3>Attachments</h3>
+                <ul>
+                  @for (f of mockFiles(); track f.name) {
+                    <li>{{ f.name }}</li>
+                  }
+                </ul>
+              }
+            </div>
+            <div class="step-actions">
+              <button mat-button matStepperPrevious>Back</button>
+              <button mat-flat-button color="primary" type="button" (click)="submitForm()" [disabled]="form.disabled">Submit</button>
+            </div>
+          </mat-step>
+        </mat-stepper>
+      </form>
+    </mat-card>
+  </div>
+}

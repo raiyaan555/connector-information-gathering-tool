@@ -1,0 +1,42 @@
+.settings-page {
+  max-width: 920px;
+}
+
+.settings-title {
+  margin: 0 0 16px;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.settings-card {
+  border-radius: 12px !important;
+  padding: 18px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.settings-row__title {
+  font-weight: 900;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.settings-row__desc {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.settings-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+

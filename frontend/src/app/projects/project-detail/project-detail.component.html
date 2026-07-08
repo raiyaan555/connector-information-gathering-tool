@@ -1,0 +1,111 @@
+@if (loading()) {
+  <app-loading-spinner />
+} @else if (project(); as p) {
+  <app-page-header
+    [title]="p.name"
+    [subtitle]="p.clientName + ' · ' + p.applicationName"
+  />
+
+  <div class="detail-actions">
+    <button mat-flat-button color="primary" (click)="generateLink()">
+      <mat-icon>link</mat-icon>
+      Generate Link
+    </button>
+    <button mat-stroked-button (click)="generateDocument()">
+      <mat-icon>description</mat-icon>
+      Generate Document
+    </button>
+    <button mat-stroked-button (click)="downloadAttachments()">
+      <mat-icon>download</mat-icon>
+      Download Attachments
+    </button>
+  </div>
+
+  <mat-tab-group [selectedIndex]="selectedTab()" (selectedIndexChange)="selectedTab.set($event)">
+    <mat-tab label="General Information">
+      <mat-card class="info-card">
+        <div class="info-grid">
+          <div><label>Project Name</label><span>{{ p.name }}</span></div>
+          <div><label>Client</label><span>{{ p.clientName }}</span></div>
+          <div><label>Application</label><span>{{ p.applicationName }}</span></div>
+          <div><label>Status</label><app-status-badge [status]="p.status" /></div>
+          <div><label>Created</label><span>{{ p.createdAt | date: 'medium' }}</span></div>
+          <div><label>Form Link</label><span class="link">{{ p.formLink || 'Not generated' }}</span></div>
+        </div>
+      </mat-card>
+
+      <mat-card class="timeline-card">
+        <h3>Status Timeline</h3>
+        <div class="timeline">
+          <div class="timeline-item timeline-item--active">
+            <div class="timeline-dot"></div>
+            <div><strong>Created</strong><span>{{ p.createdAt | date: 'medium' }}</span></div>
+          </div>
+          @if (p.formLink) {
+            <div class="timeline-item timeline-item--active">
+              <div class="timeline-dot"></div>
+              <div><strong>Form Link Generated</strong><span>{{ p.updatedAt | date: 'medium' }}</span></div>
+            </div>
+          }
+          @if (responses().length) {
+            <div class="timeline-item timeline-item--active">
+              <div class="timeline-dot"></div>
+              <div><strong>Customer Submitted</strong><span>{{ responses()[0].submittedAt | date: 'medium' }}</span></div>
+            </div>
+          }
+          <div class="timeline-item">
+            <div class="timeline-dot"></div>
+            <div><strong>Document Generation</strong><span>Pending</span></div>
+          </div>
+        </div>
+      </mat-card>
+    </mat-tab>
+
+    <mat-tab label="Responses">
+      @if (responses().length) {
+        @for (response of responses(); track response.id) {
+          <mat-card class="response-card">
+            <p class="submitted">Submitted {{ response.submittedAt | date: 'medium' }}</p>
+            <div class="response-grid">
+              @for (entry of response.formData | keyvalue; track entry.key) {
+                <div>
+                  <label>{{ entry.key }}</label>
+                  <span>{{ entry.value }}</span>
+                </div>
+              }
+            </div>
+          </mat-card>
+        }
+      } @else {
+        <div class="empty-state">No responses submitted yet.</div>
+      }
+    </mat-tab>
+
+    <mat-tab label="Attachments">
+      @if (attachments().length) {
+        <table mat-table [dataSource]="attachments()" class="attachment-table">
+          <ng-container matColumnDef="fileName">
+            <th mat-header-cell *matHeaderCellDef>File Name</th>
+            <td mat-cell *matCellDef="let a">{{ a.fileName }}</td>
+          </ng-container>
+          <ng-container matColumnDef="contentType">
+            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <td mat-cell *matCellDef="let a">{{ a.contentType }}</td>
+          </ng-container>
+          <ng-container matColumnDef="fileSize">
+            <th mat-header-cell *matHeaderCellDef>Size</th>
+            <td mat-cell *matCellDef="let a">{{ formatFileSize(a.fileSize) }}</td>
+          </ng-container>
+          <ng-container matColumnDef="uploadedAt">
+            <th mat-header-cell *matHeaderCellDef>Uploaded</th>
+            <td mat-cell *matCellDef="let a">{{ a.uploadedAt | date: 'medium' }}</td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="attachmentColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: attachmentColumns"></tr>
+        </table>
+      } @else {
+        <div class="empty-state">No attachments uploaded.</div>
+      }
+    </mat-tab>
+  </mat-tab-group>
+}

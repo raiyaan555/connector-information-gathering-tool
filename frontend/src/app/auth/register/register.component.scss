@@ -1,0 +1,37 @@
+@import '../login/login.component.scss';
+
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.success-state {
+  text-align: center;
+  padding: 24px 0;
+
+  .success-icon {
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    color: #22c55e;
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    margin: 0 0 12px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  p {
+    color: var(--text-secondary, #6b7280);
+    margin-bottom: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .name-row {
+    grid-template-columns: 1fr;
+  }
+}

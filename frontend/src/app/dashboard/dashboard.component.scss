@@ -1,0 +1,34 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dashboard__toolbar {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.add-client-btn {
+  font-weight: 600;
+}
+
+.dashboard__empty {
+  padding: 48px 32px;
+  text-align: center;
+
+  h3 {
+    margin: 0 0 8px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+}
+
+.client-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

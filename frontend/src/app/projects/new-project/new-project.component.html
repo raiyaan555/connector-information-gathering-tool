@@ -1,0 +1,55 @@
+<app-page-header title="New Project" subtitle="Create a connector information gathering project" />
+
+<mat-card class="form-card">
+  <form [formGroup]="form" class="form-grid">
+    <mat-form-field appearance="outline">
+      <mat-label>Project Name</mat-label>
+      <input matInput formControlName="name" />
+      @if (form.controls.name.hasError('required') && form.controls.name.touched) {
+        <mat-error>Required</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Client Name</mat-label>
+      <input matInput formControlName="clientName" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Application Name</mat-label>
+      <input matInput formControlName="applicationName" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Implementation Engineer</mat-label>
+      <input matInput formControlName="implementationEngineer" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Priority</mat-label>
+      <mat-select formControlName="priority">
+        @for (p of priorities; track p) {
+          <mat-option [value]="p">{{ p }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Expected Completion Date</mat-label>
+      <input matInput [matDatepicker]="picker" formControlName="expectedCompletionDate" />
+      <mat-datepicker-toggle matIconSuffix [for]="picker" />
+      <mat-datepicker #picker />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-row">
+      <mat-label>Description</mat-label>
+      <textarea matInput formControlName="description" rows="4"></textarea>
+    </mat-form-field>
+
+    <div class="form-actions full-row">
+      <button mat-flat-button color="primary" type="button" (click)="onSave()" [disabled]="saving()">
+        Save &amp; Open Workspace
+      </button>
+    </div>
+  </form>
+</mat-card>

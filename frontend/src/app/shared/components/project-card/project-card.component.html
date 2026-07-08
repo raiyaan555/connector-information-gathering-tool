@@ -1,0 +1,34 @@
+<a class="project-tile" [routerLink]="['/project', project().id]" role="link">
+  <div class="project-tile__main">
+    <div class="project-tile__title-block">
+      <h3 class="project-tile__name">{{ project().name }}</h3>
+      <span class="project-tile__status" [class]="statusClass()">{{ project().status }}</span>
+    </div>
+
+    <div class="project-tile__fields">
+      <div class="field">
+        <span class="field__label">Client</span>
+        <span class="field__value">{{ project().clientName }}</span>
+      </div>
+      <div class="field">
+        <span class="field__label">Application</span>
+        <span class="field__value">{{ project().applicationName }}</span>
+      </div>
+      <div class="field">
+        <span class="field__label">Completion</span>
+        <span class="field__value field__value--accent">{{ completionPercent() }}%</span>
+      </div>
+      <div class="field">
+        <span class="field__label">Last Updated</span>
+        <span class="field__value">{{ project().updatedAt | date: 'medium' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="project-tile__progress" aria-hidden="true">
+    <div class="progress-track">
+      <div class="progress-fill" [style.width.%]="completionPercent()"></div>
+    </div>
+    <mat-icon class="project-tile__chevron">chevron_right</mat-icon>
+  </div>
+</a>
