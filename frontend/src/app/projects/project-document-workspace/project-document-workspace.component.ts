@@ -4,18 +4,21 @@ import { MatCardModule } from '@angular/material/card';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTableModule } from '@angular/material/table';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { DatePipe } from '@angular/common';
+import { firstValueFrom } from 'rxjs';
 
 import { ProjectService } from '../../services/project.service';
 import { NotificationService } from '../../services/notification.service';
 import { WorkspaceDraftService } from '../../services/workspace-draft.service';
-import { ProjectDocumentRepository, DocumentGenerationOptions, DocType, AttachmentMeta, GeneratedDocumentEntry, ProjectVersionEntry } from '../../services/project-document.repository';
+import {
+  ProjectDocumentRepository,
+  AttachmentMeta,
+  ProjectVersionEntry,
+} from '../../services/project-document.repository';
+import { PdfService } from '../../services/pdf.service';
 import { Project } from '../../models/project.model';
-import { ConfirmDialogComponent } from '../../shared/components/confirm-dialog/confirm-dialog.component';
 
 type SectionKey = 'about' | 'integration' | 'ci' | 'sot' | 'encryption' | 'general' | 'comments' | 'attachments' | 'review';
 
@@ -154,7 +157,16 @@ const SECTION_DEFS: Array<{ key: SectionKey; title: string; controls: string[]; 
 @Component({
   selector: 'app-project-document-workspace',
   standalone: true,
-  imports: [RouterLink, MatCardModule, MatExpansionModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatTableModule, MatDialogModule, MatProgressBarModule, DatePipe],
+  imports: [
+    RouterLink,
+    MatCardModule,
+    MatExpansionModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTableModule,
+    MatProgressBarModule,
+    DatePipe,
+  ],
   templateUrl: './project-document-workspace.component.html',
   styleUrl: './project-document-workspace.component.scss',
 })
@@ -165,47 +177,41 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
   readonly notification = inject(NotificationService);
   readonly draftService = inject(WorkspaceDraftService);
   private readonly docRepo = inject(ProjectDocumentRepository);
-  private readonly dialog = inject(MatDialog);
+  private readonly pdfService = inject(PdfService);
 
   readonly projectId = this.route.snapshot.paramMap.get('id')!;
 
   readonly project = signal<Project | null>(null);
   readonly versions = signal<ProjectVersionEntry[]>([]);
-
-  readonly draftSnapshot = signal<{ formData: Record<string, unknown>; attachments: AttachmentMeta[]; completionPercent: number } | null>(null);
-
+  readonly draftSnapshot = signal<{
+    formData: Record<string, unknown>;
+    attachments: AttachmentMeta[];
+    completionPercent: number;
+  } | null>(null);
   readonly selectedVersionNumber = signal<number | null>(null);
+  readonly downloadingPdf = signal(false);
+  readonly sharingEmail = signal(false);
 
-  private readonly generatedDocsRefreshKey = signal(0);
-
-  readonly options = signal<DocumentGenerationOptions>({
-    includeConnectorForm: true,
-    includeUploadedApiDocumentation: true,
-    includeSwaggerFiles: true,
-    includePostmanCollection: true,
-    includeArchitectureDiagrams: true,
-    includeScreenshots: true,
-    includeCredentialsDocument: true,
-    includeAdditionalUploadedFiles: true,
-  });
-
-  readonly docs = computed(() => {
-    // LocalStorage updates are not reactive by themselves, so we depend on this key.
-    this.generatedDocsRefreshKey();
-    const v = this.selectedVersionNumber();
-    return this.docRepo.listGeneratedDocuments(this.projectId, v ?? undefined);
-  });
+  readonly sectionDefs = SECTION_DEFS;
 
   readonly snapshot = computed(() => {
     const v = this.selectedVersionNumber();
     if (v == null) return this.draftSnapshot();
     const version = this.versions().find((x) => x.versionNumber === v);
-    if (!version) return null;
-    return { formData: version.formData, attachments: version.attachments, completionPercent: version.completionPercent };
+    if (!version) return this.draftSnapshot();
+    return {
+      formData: version.formData,
+      attachments: version.attachments,
+      completionPercent: version.completionPercent,
+    };
   });
 
-  readonly lastDraftSavedLabel = computed(() => this.draftService.lastSavedLabel());
-  readonly sectionDefs = SECTION_DEFS;
+  readonly isReadOnlyVersion = computed(() => {
+    const versions = this.versions();
+    const selected = this.selectedVersionNumber();
+    if (!versions.length || selected == null) return false;
+    return selected !== versions[0].versionNumber;
+  });
 
   ngOnInit(): void {
     this.projectService.getById(this.projectId).subscribe({
@@ -214,7 +220,7 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
       },
     });
 
-    this.draftService.load(this.projectId); // updates lastSavedLabel()
+    this.draftService.load(this.projectId);
     const draft = this.draftService.load(this.projectId);
     if (draft) {
       this.draftSnapshot.set({
@@ -226,13 +232,20 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
 
     const versions = this.docRepo.getVersions(this.projectId);
     this.versions.set(versions);
-    // Versions are ordered latest-first in the repository.
     this.selectedVersionNumber.set(versions.length ? versions[0].versionNumber : null);
+
+    // Drafts with no official version go straight to the form.
+    if (!versions.length) {
+      this.router.navigate(['/project', this.projectId, 'edit'], { replaceUrl: true });
+    }
+  }
+
+  hasCompletedVersion(): boolean {
+    return this.versions().length > 0;
   }
 
   completionPercent(): number {
-    const snap = this.snapshot();
-    return snap?.completionPercent ?? 0;
+    return this.snapshot()?.completionPercent ?? 0;
   }
 
   lastOfficialSaveLabel(): string {
@@ -241,139 +254,97 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
     return new Date(latest.createdAt).toLocaleString();
   }
 
+  editProject(): void {
+    this.editSection('review');
+  }
+
   editSection(sectionKey: SectionKey): void {
+    if (this.isReadOnlyVersion()) {
+      this.notification.info('Switch to the active version before editing.');
+      return;
+    }
     this.router.navigate(['/project', this.projectId, 'edit'], { queryParams: { section: sectionKey } });
-  }
-
-  previewDocument(doc: GeneratedDocumentEntry): void {
-    const lines: string[] = [];
-    lines.push(`Preview (placeholder)`);
-    lines.push(`File: ${doc.fileName}`);
-    lines.push(`Generated: ${new Date(doc.createdAt).toLocaleString()}`);
-    lines.push('');
-    lines.push(`Options:`);
-    lines.push(JSON.stringify(doc.options, null, 2));
-    lines.push('');
-    lines.push(`Included attachments (${doc.includedAttachmentNames.length}):`);
-    lines.push(doc.includedAttachmentNames.join(', '));
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  }
-
-  downloadDocument(doc: GeneratedDocumentEntry): void {
-    const content = [
-      `ConnectorInformation placeholder`,
-      `File: ${doc.fileName}`,
-      `Version: ${doc.versionNumber}`,
-      `Generated: ${new Date(doc.createdAt).toISOString()}`,
-      '',
-      'Options:',
-      JSON.stringify(doc.options, null, 2),
-      '',
-      'Included attachments:',
-      doc.includedAttachmentNames.join(', '),
-    ].join('\n');
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = doc.fileName.replace(/\.(pdf|docx|pptx)$/i, '.txt');
-    a.rel = 'noopener';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 20_000);
-  }
-
-  deleteDocument(doc: GeneratedDocumentEntry): void {
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '420px',
-      data: {
-        title: 'Delete Generated Document',
-        message: `Are you sure you want to delete ${doc.fileName}?`,
-        confirmText: 'Delete',
-        cancelText: 'Cancel',
-      },
-    });
-    ref.afterClosed().subscribe((confirmed) => {
-      if (!confirmed) return;
-      const ok = this.docRepo.deleteGeneratedDocument(this.projectId, doc.id);
-      if (ok) {
-        this.generatedDocsRefreshKey.update((n) => n + 1);
-        this.notification.success('Document deleted');
-      }
-    });
-  }
-
-  regenerateDocument(doc: GeneratedDocumentEntry): void {
-    const snap = this.snapshot();
-    if (!snap) {
-      this.notification.error('No snapshot available to regenerate.');
-      return;
-    }
-
-    const fileExt = doc.docType === 'pdf' ? 'pdf' : doc.docType === 'word' ? 'docx' : 'pptx';
-    const regenSuffix = `regen_${Date.now()}`;
-    const fileName = doc.fileName.replace(new RegExp(`\\.${fileExt}$`, 'i'), `_${regenSuffix}.${fileExt}`);
-
-    this.docRepo.addGeneratedDocument({
-      projectId: this.projectId,
-      versionNumber: doc.versionNumber,
-      docType: doc.docType,
-      fileName,
-      options: doc.options,
-      includedAttachmentNames: doc.includedAttachmentNames,
-    });
-
-    this.generatedDocsRefreshKey.update((n) => n + 1);
-    this.notification.success('Document regenerated (placeholder)');
-  }
-
-  private activeVersionNumberOrNull(): number | null {
-    const v = this.selectedVersionNumber();
-    if (v != null) return v;
-    return null;
-  }
-
-  generateDocument(docType: DocType): void {
-    const versions = this.versions();
-    const selected = this.activeVersionNumberOrNull() ?? (versions.length ? versions[versions.length - 1].versionNumber : null);
-    if (selected == null) {
-      this.notification.error('Please do Review & Save first to create an official version.');
-      return;
-    }
-
-    const options = this.options();
-    const snap = this.snapshot();
-    if (!snap) {
-      this.notification.error('No draft/version snapshot available.');
-      return;
-    }
-
-    const fileExt = docType === 'pdf' ? 'pdf' : docType === 'word' ? 'docx' : 'pptx';
-    const fileName = `ConnectorInformation_v${selected}.${fileExt}`;
-    this.docRepo.addGeneratedDocument({
-      projectId: this.projectId,
-      versionNumber: selected,
-      docType,
-      fileName,
-      options,
-      includedAttachmentNames: snap.attachments.map((a) => a.name),
-    });
-
-    this.generatedDocsRefreshKey.update((n) => n + 1);
-    this.notification.success('Document generated (placeholder)');
-  }
-
-  setDocOption<K extends keyof DocumentGenerationOptions>(key: K, value: boolean): void {
-    this.options.update((o) => ({ ...o, [key]: value }));
   }
 
   setSelectedVersion(v: number): void {
     this.selectedVersionNumber.set(v);
   }
 
-  sectionValue(sectionControls: string[], formData: Record<string, unknown>): Array<{ label: string; value: unknown }> {
+  selectActiveVersion(): void {
+    const latest = this.versions()[0];
+    if (latest) this.selectedVersionNumber.set(latest.versionNumber);
+  }
+
+  async downloadPdf(): Promise<void> {
+    const snap = this.snapshot();
+    if (!snap) {
+      this.notification.error('No saved information available to generate a PDF.');
+      return;
+    }
+
+    this.downloadingPdf.set(true);
+    try {
+      const formData = this.toStringMap(snap.formData);
+      const blob = await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
+      const project = this.project();
+      const fileName = `CIGT_${project?.clientName || 'Client'}_${project?.applicationName || 'Application'}.pdf`.replace(
+        /[^\w.\-]+/g,
+        '_',
+      );
+      this.downloadBlob(blob, fileName);
+
+      const versionNumber = this.selectedVersionNumber() ?? this.versions()[0]?.versionNumber;
+      if (versionNumber != null) {
+        this.docRepo.addGeneratedDocument({
+          projectId: this.projectId,
+          versionNumber,
+          docType: 'pdf',
+          fileName,
+          includedAttachmentNames: snap.attachments.map((a) => a.name),
+        });
+      }
+
+      this.notification.success('PDF downloaded');
+    } catch {
+      this.notification.error('PDF download failed. Please try again.');
+    } finally {
+      this.downloadingPdf.set(false);
+    }
+  }
+
+  async shareToConnectorTeam(): Promise<void> {
+    if (this.isReadOnlyVersion()) {
+      this.notification.info('Share is only available for the active version.');
+      return;
+    }
+
+    this.sharingEmail.set(true);
+    try {
+      // Ensure latest PDF exists on the server before building the .eml draft.
+      const snap = this.snapshot();
+      if (snap) {
+        const formData = this.toStringMap(snap.formData);
+        await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
+      }
+
+      const eml = await firstValueFrom(this.pdfService.shareEmail(this.projectId));
+      const project = this.project();
+      const emlName = `Share_${project?.applicationName || 'Connector'}.eml`.replace(/[^\w.\-]+/g, '_');
+      this.downloadBlob(eml, emlName);
+      this.notification.success(
+        'Outlook draft downloaded. Open the .eml file to review and send — the PDF is already attached.',
+      );
+    } catch {
+      this.notification.error('Could not prepare the email draft. Please try again.');
+    } finally {
+      this.sharingEmail.set(false);
+    }
+  }
+
+  sectionValue(
+    sectionControls: string[],
+    formData: Record<string, unknown>,
+  ): Array<{ label: string; value: unknown }> {
     return sectionControls
       .map((key) => ({
         label: CONTROL_LABELS[key] ?? key,
@@ -381,5 +352,29 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
       }))
       .filter((x) => x.value !== undefined && x.value !== null && String(x.value).trim() !== '');
   }
-}
 
+  private toStringMap(raw: Record<string, unknown>): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (value === null || value === undefined) continue;
+      if (Array.isArray(value)) {
+        const joined = value.filter(Boolean).map(String).join(', ');
+        if (joined) result[key] = joined;
+        continue;
+      }
+      const text = String(value).trim();
+      if (text) result[key] = text;
+    }
+    return result;
+  }
+
+  private downloadBlob(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.rel = 'noopener';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}

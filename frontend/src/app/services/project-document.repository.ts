@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-export type DocType = 'pdf' | 'word' | 'ppt';
+export type DocType = 'pdf';
 export type SaveType = 'Official' | 'Change Request';
 
 export interface AttachmentMeta {
@@ -39,6 +39,8 @@ export interface ProjectVersionEntry {
   formData: Record<string, unknown>;
   attachments: AttachmentMeta[];
   completionPercent: number;
+  changedBy: string;
+  changeRequestId: string | null;
 }
 
 export interface ProjectDocumentState {
@@ -89,7 +91,10 @@ export class ProjectDocumentRepository {
 
   getVersions(projectId: string): ProjectVersionEntry[] {
     // Latest versions first (higher versionNumber on top).
-    return this.getOrCreateState(projectId).versions.slice().sort((a, b) => b.versionNumber - a.versionNumber);
+    return this.getOrCreateState(projectId)
+      .versions.slice()
+      .map((v) => this.normalizeVersion(v))
+      .sort((a, b) => b.versionNumber - a.versionNumber);
   }
 
   getLatestVersion(projectId: string): ProjectVersionEntry | null {
@@ -97,15 +102,23 @@ export class ProjectDocumentRepository {
     return versions.length ? versions[0] : null;
   }
 
+  hasOfficialVersion(projectId: string): boolean {
+    return this.getOrCreateState(projectId).versions.length > 0;
+  }
+
   saveVersion(params: {
     projectId: string;
     formData: Record<string, unknown>;
     attachments: AttachmentMeta[];
     completionPercent: number;
+    changedBy: string;
   }): ProjectVersionEntry {
     const state = this.getOrCreateState(params.projectId);
-    const nextVersion = state.versions.length ? state.versions[state.versions.length - 1].versionNumber + 1 : 1;
+    const nextVersion = state.versions.length
+      ? Math.max(...state.versions.map((v) => v.versionNumber)) + 1
+      : 1;
     const saveType: SaveType = nextVersion === 1 ? 'Official' : 'Change Request';
+    const changeRequestId = nextVersion === 1 ? null : `CR-${nextVersion}`;
 
     const now = new Date().toISOString();
     const version: ProjectVersionEntry = {
@@ -116,6 +129,8 @@ export class ProjectDocumentRepository {
       formData: params.formData,
       attachments: params.attachments,
       completionPercent: params.completionPercent,
+      changedBy: params.changedBy || 'Unknown',
+      changeRequestId,
     };
 
     state.versions.push(version);
@@ -135,7 +150,7 @@ export class ProjectDocumentRepository {
     versionNumber: number;
     docType: DocType;
     fileName: string;
-    options: DocumentGenerationOptions;
+    options?: DocumentGenerationOptions;
     includedAttachmentNames: string[];
   }): GeneratedDocumentEntry {
     const state = this.getOrCreateState(params.projectId);
@@ -145,7 +160,16 @@ export class ProjectDocumentRepository {
       docType: params.docType,
       fileName: params.fileName,
       createdAt: new Date().toISOString(),
-      options: params.options,
+      options: params.options ?? {
+        includeConnectorForm: true,
+        includeUploadedApiDocumentation: true,
+        includeSwaggerFiles: true,
+        includePostmanCollection: true,
+        includeArchitectureDiagrams: true,
+        includeScreenshots: true,
+        includeCredentialsDocument: true,
+        includeAdditionalUploadedFiles: true,
+      },
       includedAttachmentNames: params.includedAttachmentNames,
     };
     state.generatedDocuments.push(entry);
@@ -161,5 +185,13 @@ export class ProjectDocumentRepository {
     this.writeState(state);
     return before !== after;
   }
-}
 
+  private normalizeVersion(v: ProjectVersionEntry): ProjectVersionEntry {
+    return {
+      ...v,
+      changedBy: v.changedBy || 'Unknown',
+      changeRequestId:
+        v.changeRequestId ?? (v.versionNumber > 1 ? `CR-${v.versionNumber}` : null),
+    };
+  }
+}

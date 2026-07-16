@@ -1,11 +1,11 @@
-namespace API.Repositories;
-
 using API.Models;
+
+namespace API.Repositories;
 
 public interface ICustomerFormRepository
 {
-    CustomerFormResponse? GetByToken(string token);
-    IEnumerable<CustomerFormResponse> GetByProjectId(Guid projectId);
-    CustomerFormResponse Add(CustomerFormResponse response);
-    bool IsSubmitted(string token);
+    Task<CustomerForm?> GetByTokenAsync(string token, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CustomerForm>> GetByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
+    Task<CustomerForm> AddAsync(CustomerForm form, CancellationToken cancellationToken = default);
+    Task<bool> IsSubmittedAsync(string token, CancellationToken cancellationToken = default);
 }
