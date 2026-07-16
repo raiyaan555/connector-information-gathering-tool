@@ -150,14 +150,9 @@ http://localhost:4200
 
 ---
 
-# 🔐 Dummy Login
 
-| Field | Value |
-|---------|--------|
-| Email | admin@theconnector.com |
-| Password | Password123 |
 
-> Email must end with **@theconnector.com**
+> Email must end with **@arconnet.com**
 
 ---
 
