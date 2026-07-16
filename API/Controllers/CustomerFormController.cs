@@ -1,6 +1,7 @@
 using API.DTOs;
 using API.Models;
 using API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
@@ -16,26 +17,32 @@ public class CustomerFormController : ControllerBase
         _customerFormService = customerFormService;
     }
 
+    [AllowAnonymous]
     [HttpGet("{token}")]
-    public ActionResult<ApiResponse<CustomerFormDto>> GetForm(string token)
+    public async Task<ActionResult<ApiResponse<CustomerFormDto>>> GetForm(string token, CancellationToken cancellationToken)
     {
-        var result = _customerFormService.GetFormByToken(token);
+        var result = await _customerFormService.GetFormByTokenAsync(token, cancellationToken);
         return result.Success ? Ok(result) : NotFound(result);
     }
 
+    [AllowAnonymous]
     [HttpPost("{token}")]
-    public ActionResult<ApiResponse<CustomerFormResponseDto>> SubmitForm(
+    public async Task<ActionResult<ApiResponse<CustomerFormResponseDto>>> SubmitForm(
         string token,
-        [FromBody] SubmitCustomerFormRequest request)
+        [FromBody] SubmitCustomerFormRequest request,
+        CancellationToken cancellationToken)
     {
-        var result = _customerFormService.SubmitForm(token, request);
+        var result = await _customerFormService.SubmitFormAsync(token, request, cancellationToken);
         return result.Success ? Ok(result) : BadRequest(result);
     }
 
+    [Authorize]
     [HttpGet("project/{projectId:guid}/responses")]
-    public ActionResult<ApiResponse<IEnumerable<CustomerFormResponseDto>>> GetResponses(Guid projectId)
+    public async Task<ActionResult<ApiResponse<IEnumerable<CustomerFormResponseDto>>>> GetResponses(
+        Guid projectId,
+        CancellationToken cancellationToken)
     {
-        var result = _customerFormService.GetResponsesByProjectId(projectId);
+        var result = await _customerFormService.GetResponsesByProjectIdAsync(projectId, cancellationToken);
         return result.Success ? Ok(result) : NotFound(result);
     }
 }

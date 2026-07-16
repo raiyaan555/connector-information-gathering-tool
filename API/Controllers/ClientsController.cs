@@ -1,11 +1,13 @@
-namespace API.Controllers;
-
 using API.DTOs;
 using API.Models;
 using API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
+
 [ApiController]
+[Authorize]
 [Route("api/clients")]
 public class ClientsController : ControllerBase
 {
@@ -17,23 +19,25 @@ public class ClientsController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<ApiResponse<List<ClientDto>>> GetAll()
+    public async Task<ActionResult<ApiResponse<List<ClientDto>>>> GetAll(CancellationToken cancellationToken)
     {
-        return Ok(_clientService.GetAll());
+        var result = await _clientService.GetAllAsync(cancellationToken);
+        return Ok(result);
     }
 
     [HttpPost]
-    public ActionResult<ApiResponse<ClientDto>> Create([FromBody] CreateClientRequest request)
+    public async Task<ActionResult<ApiResponse<ClientDto>>> Create(
+        [FromBody] CreateClientRequest request,
+        CancellationToken cancellationToken)
     {
-        var result = _clientService.Create(request);
+        var result = await _clientService.CreateAsync(request, cancellationToken);
         return result.Success ? Ok(result) : BadRequest(result);
     }
 
     [HttpDelete("{id:guid}")]
-    public ActionResult<ApiResponse<MessageResponse>> Delete(Guid id)
+    public async Task<ActionResult<ApiResponse<MessageResponse>>> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var result = _clientService.Delete(id);
+        var result = await _clientService.DeleteAsync(id, cancellationToken);
         return result.Success ? Ok(result) : NotFound(result);
     }
 }
-

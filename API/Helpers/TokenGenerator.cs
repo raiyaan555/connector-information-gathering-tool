@@ -4,6 +4,9 @@ namespace API.Helpers;
 
 public static class TokenGenerator
 {
+    /// <summary>
+    /// Generates a URL-safe token for customer form links.
+    /// </summary>
     public static string GenerateToken()
     {
         var bytes = RandomNumberGenerator.GetBytes(32);
@@ -11,10 +14,5 @@ public static class TokenGenerator
             .Replace("+", "-")
             .Replace("/", "_")
             .TrimEnd('=');
-    }
-
-    public static string GenerateAuthToken(string email)
-    {
-        return $"mock-jwt-{Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(email))}-{Guid.NewGuid():N}";
     }
 }

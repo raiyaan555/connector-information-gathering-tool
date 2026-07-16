@@ -1,8 +1,16 @@
-namespace API.Services;
-
 using API.DTOs;
+using API.Helpers;
 using API.Models;
 using API.Repositories;
+
+namespace API.Services;
+
+public interface IClientService
+{
+    Task<ApiResponse<List<ClientDto>>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<ApiResponse<ClientDto>> CreateAsync(CreateClientRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<MessageResponse>> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+}
 
 public class ClientService : IClientService
 {
@@ -15,13 +23,13 @@ public class ClientService : IClientService
         _projectRepository = projectRepository;
     }
 
-    public ApiResponse<List<ClientDto>> GetAll()
+    public async Task<ApiResponse<List<ClientDto>>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var clients = _clientRepository.GetAll().Select(ToDto).ToList();
-        return ApiResponse<List<ClientDto>>.Ok(clients);
+        var clients = await _clientRepository.GetAllAsync(cancellationToken);
+        return ApiResponse<List<ClientDto>>.Ok(clients.Select(ToDto).ToList());
     }
 
-    public ApiResponse<ClientDto> Create(CreateClientRequest request)
+    public async Task<ApiResponse<ClientDto>> CreateAsync(CreateClientRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.CompanyName))
             return ApiResponse<ClientDto>.Fail("Company name is required.");
@@ -41,19 +49,19 @@ public class ClientService : IClientService
             UpdatedAt = DateTime.UtcNow
         };
 
-        _clientRepository.Add(client);
+        await _clientRepository.AddAsync(client, cancellationToken);
         return ApiResponse<ClientDto>.Ok(ToDto(client), "Client created successfully.");
     }
 
-    public ApiResponse<MessageResponse> Delete(Guid id)
+    public async Task<ApiResponse<MessageResponse>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var client = _clientRepository.GetById(id);
+        var client = await _clientRepository.GetByIdAsync(id, cancellationToken);
         if (client is null)
             return ApiResponse<MessageResponse>.Fail("Client not found.");
 
-        _projectRepository.DeleteByClientName(client.CompanyName);
+        await _projectRepository.DeleteByClientNameAsync(client.CompanyName, cancellationToken);
 
-        if (!_clientRepository.Delete(id))
+        if (!await _clientRepository.DeleteAsync(id, cancellationToken))
             return ApiResponse<MessageResponse>.Fail("Client not found.");
 
         return ApiResponse<MessageResponse>.Ok(

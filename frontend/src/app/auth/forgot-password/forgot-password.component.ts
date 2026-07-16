@@ -35,7 +35,7 @@ export class ForgotPasswordComponent {
   readonly sent = signal(false);
 
   readonly form = this.fb.nonNullable.group({
-    email: ['', [Validators.required, Validators.email, Validators.pattern(/@theconnector\.com$/)]],
+    email: ['', [Validators.required, Validators.email, Validators.pattern(/@arconnet\.com$/)]],
   });
 
   onSubmit(): void {

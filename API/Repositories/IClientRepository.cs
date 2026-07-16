@@ -1,12 +1,11 @@
-namespace API.Repositories;
-
 using API.Models;
+
+namespace API.Repositories;
 
 public interface IClientRepository
 {
-    IReadOnlyList<Client> GetAll();
-    Client? GetById(Guid id);
-    Client Add(Client client);
-    bool Delete(Guid id);
+    Task<IReadOnlyList<Client>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<Client?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Client> AddAsync(Client client, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
-
