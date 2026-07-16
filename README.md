@@ -183,12 +183,6 @@ http://localhost:4200
 
 ---
 
-# 🔐 Default Login
-
-| Field | Value |
-|--------|-------|
-| Email | admin@arconnet.com |
-| Password | Password123 |
 
 > All users must register using an **@arconnet.com** email address.
 
