@@ -14,7 +14,7 @@
       <div class="workspace__header-left">
         <a [routerLink]="['/project', projectId]" class="back-link">
           <mat-icon>arrow_back</mat-icon>
-          Back to Document Workspace
+          Back to Review
         </a>
         <div>
           <h1>{{ p.name }}</h1>
@@ -443,9 +443,9 @@
         <mat-step [stepControl]="form">
             <div class="step-content">
               <h2>Special Comments (If Any)</h2>
-              <mat-form-field appearance="outline" class="full-row">
+              <mat-form-field appearance="outline" class="full-row special-comments-field">
                 <mat-label>Special Comments</mat-label>
-                <textarea matInput formControlName="specialComments" rows="8"></textarea>
+                <textarea matInput formControlName="specialComments" rows="12"></textarea>
                 <mat-hint class="sample-hint">{{ hints['specialComments'] }}</mat-hint>
               </mat-form-field>
             </div>
@@ -565,10 +565,15 @@
             <div class="step-actions">
               <button mat-button type="button" matStepperPrevious>Previous</button>
               <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>
-              <button mat-stroked-button type="button" (click)="generatePpt()">Generate PPT</button>
-              <button mat-stroked-button type="button" (click)="generateWord()">Generate Word</button>
-              <button mat-stroked-button type="button" (click)="generatePdf()">Generate PDF</button>
-              <button mat-flat-button color="primary" type="button" (click)="reviewAndSave()">Review &amp; Save</button>
+              <button
+                mat-flat-button
+                color="primary"
+                type="button"
+                (click)="generatePdf()"
+                [disabled]="generatingPdf()"
+              >
+                {{ generatingPdf() ? 'Generating PDF…' : (hasOfficialVersion() ? 'Save Changes & Generate PDF' : 'Generate PDF') }}
+              </button>
             </div>
           </mat-step>
         </mat-stepper>

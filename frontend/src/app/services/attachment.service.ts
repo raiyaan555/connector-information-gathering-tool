@@ -18,6 +18,12 @@ export class AttachmentService {
     return this.http.post<ApiResponse<Attachment>>(`${this.baseUrl}/project/${projectId}`, payload);
   }
 
+  uploadFile(projectId: string, file: File): Observable<ApiResponse<Attachment>> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.http.post<ApiResponse<Attachment>>(`${this.baseUrl}/project/${projectId}/file`, form);
+  }
+
   delete(id: string): Observable<ApiResponse<{ message: string }>> {
     return this.http.delete<ApiResponse<{ message: string }>>(`${this.baseUrl}/${id}`);
   }

@@ -5,34 +5,60 @@ using API.Repositories;
 
 namespace API.Services;
 
+public interface IProjectService
+{
+    Task<ApiResponse<IEnumerable<ProjectDto>>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<ApiResponse<ProjectDto>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<ApiResponse<ProjectDto>> CreateAsync(CreateProjectRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<ProjectDto>> UpdateAsync(Guid id, UpdateProjectRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<MessageResponse>> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<ApiResponse<GenerateLinkResponse>> GenerateLinkAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
 public class ProjectService : IProjectService
 {
     private readonly IProjectRepository _projectRepository;
+    private readonly IClientRepository _clientRepository;
+    private readonly IConfiguration _configuration;
 
-    public ProjectService(IProjectRepository projectRepository)
+    public ProjectService(
+        IProjectRepository projectRepository,
+        IClientRepository clientRepository,
+        IConfiguration configuration)
     {
         _projectRepository = projectRepository;
+        _clientRepository = clientRepository;
+        _configuration = configuration;
     }
 
-    public ApiResponse<IEnumerable<ProjectDto>> GetAll()
+    public async Task<ApiResponse<IEnumerable<ProjectDto>>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var projects = _projectRepository.GetAll().Select(MapToDto);
-        return ApiResponse<IEnumerable<ProjectDto>>.Ok(projects);
+        var projects = await _projectRepository.GetAllAsync(cancellationToken);
+        return ApiResponse<IEnumerable<ProjectDto>>.Ok(projects.Select(MapToDto));
     }
 
-    public ApiResponse<ProjectDto> GetById(Guid id)
+    public async Task<ApiResponse<ProjectDto>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var project = _projectRepository.GetById(id);
+        var project = await _projectRepository.GetByIdAsync(id, cancellationToken);
         if (project is null)
             return ApiResponse<ProjectDto>.Fail("Project not found.");
 
         return ApiResponse<ProjectDto>.Ok(MapToDto(project));
     }
 
-    public ApiResponse<ProjectDto> Create(CreateProjectRequest request)
+    public async Task<ApiResponse<ProjectDto>> CreateAsync(CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             return ApiResponse<ProjectDto>.Fail("Project name is required.");
+
+        Guid? clientId = null;
+        if (!string.IsNullOrWhiteSpace(request.ClientName))
+        {
+            var clients = await _clientRepository.GetAllAsync(cancellationToken);
+            clientId = clients
+                .FirstOrDefault(c => string.Equals(c.CompanyName, request.ClientName, StringComparison.OrdinalIgnoreCase))
+                ?.Id;
+        }
 
         var now = DateTime.UtcNow;
         var project = new Project
@@ -40,6 +66,7 @@ public class ProjectService : IProjectService
             Id = Guid.NewGuid(),
             Name = request.Name,
             ClientName = request.ClientName,
+            ClientId = clientId,
             ApplicationName = request.ApplicationName,
             Description = request.Description,
             ImplementationEngineer = request.ImplementationEngineer,
@@ -49,16 +76,16 @@ public class ProjectService : IProjectService
             Status = ProjectMapper.ParseStatus(request.Status),
             CreatedAt = now,
             UpdatedAt = now,
-            CreatedBy = request.ImplementationEngineer ?? "admin@theconnector.com"
+            CreatedBy = request.ImplementationEngineer ?? "admin@arconnet.com"
         };
 
-        _projectRepository.Add(project);
+        await _projectRepository.AddAsync(project, cancellationToken);
         return ApiResponse<ProjectDto>.Ok(MapToDto(project), "Project created successfully.");
     }
 
-    public ApiResponse<ProjectDto> Update(Guid id, UpdateProjectRequest request)
+    public async Task<ApiResponse<ProjectDto>> UpdateAsync(Guid id, UpdateProjectRequest request, CancellationToken cancellationToken = default)
     {
-        var project = _projectRepository.GetById(id);
+        var project = await _projectRepository.GetByIdAsync(id, cancellationToken);
         if (project is null)
             return ApiResponse<ProjectDto>.Fail("Project not found.");
 
@@ -66,14 +93,22 @@ public class ProjectService : IProjectService
         project.ClientName = request.ClientName;
         project.ApplicationName = request.ApplicationName;
         project.Status = ProjectMapper.ParseStatus(request.Status);
-        _projectRepository.Update(project);
 
+        if (!string.IsNullOrWhiteSpace(request.ClientName))
+        {
+            var clients = await _clientRepository.GetAllAsync(cancellationToken);
+            project.ClientId = clients
+                .FirstOrDefault(c => string.Equals(c.CompanyName, request.ClientName, StringComparison.OrdinalIgnoreCase))
+                ?.Id;
+        }
+
+        await _projectRepository.UpdateAsync(project, cancellationToken);
         return ApiResponse<ProjectDto>.Ok(MapToDto(project), "Project updated successfully.");
     }
 
-    public ApiResponse<MessageResponse> Delete(Guid id)
+    public async Task<ApiResponse<MessageResponse>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        if (!_projectRepository.Delete(id))
+        if (!await _projectRepository.DeleteAsync(id, cancellationToken))
             return ApiResponse<MessageResponse>.Fail("Project not found.");
 
         return ApiResponse<MessageResponse>.Ok(
@@ -81,16 +116,17 @@ public class ProjectService : IProjectService
             "Project deleted successfully.");
     }
 
-    public ApiResponse<GenerateLinkResponse> GenerateLink(Guid id)
+    public async Task<ApiResponse<GenerateLinkResponse>> GenerateLinkAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var project = _projectRepository.GetById(id);
+        var project = await _projectRepository.GetByIdAsync(id, cancellationToken);
         if (project is null)
             return ApiResponse<GenerateLinkResponse>.Fail("Project not found.");
 
+        var frontendBase = _configuration["App:FrontendBaseUrl"] ?? "http://localhost:4200";
         var token = TokenGenerator.GenerateToken();
         project.FormToken = token;
-        project.FormLink = $"http://localhost:4200/form/{token}";
-        _projectRepository.Update(project);
+        project.FormLink = $"{frontendBase.TrimEnd('/')}/form/{token}";
+        await _projectRepository.UpdateAsync(project, cancellationToken);
 
         return ApiResponse<GenerateLinkResponse>.Ok(new GenerateLinkResponse
         {

@@ -12,19 +12,20 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { DatePipe, KeyValuePipe } from '@angular/common';
 import { debounceTime } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { ProjectService } from '../../services/project.service';
 import { NotificationService } from '../../services/notification.service';
 import { WorkspaceDraftService } from '../../services/workspace-draft.service';
+import { AttachmentService } from '../../services/attachment.service';
+import { PdfService } from '../../services/pdf.service';
 import { ProjectDocumentRepository } from '../../services/project-document.repository';
-import { ConfirmDialogComponent } from '../../shared/components/confirm-dialog/confirm-dialog.component';
+import { AuthService } from '../../services/auth.service';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
 import { SampleHintComponent } from '../../shared/components/sample-hint/sample-hint.component';
-import { ReviewSaveDialogComponent, ReviewSaveDialogSection } from '../../shared/components/review-save-dialog/review-save-dialog.component';
 import {
   createCustomerForm,
   LIFECYCLE_OPTIONS,
@@ -42,11 +43,11 @@ interface WorkspaceFile {
   type: string;
   size: number;
   uploadedAt: Date;
-  /**
-   * In-memory only (not persisted).
-   * Used for preview/download actions before refresh.
-   */
   objectUrl?: string;
+  /** In-session File reference for uploading bytes to the API. */
+  file?: File;
+  /** Server attachment id after successful upload. */
+  serverId?: string;
 }
 
 @Component({
@@ -67,7 +68,6 @@ interface WorkspaceFile {
     MatIconModule,
     MatCardModule,
     MatTableModule,
-    MatDialogModule,
     MatExpansionModule,
     MatProgressBarModule,
     LoadingSpinnerComponent,
@@ -83,7 +83,10 @@ export class ProjectWorkspaceComponent implements OnInit {
   private readonly projectService = inject(ProjectService);
   private readonly notification = inject(NotificationService);
   private readonly draftService = inject(WorkspaceDraftService);
-  private readonly dialog = inject(MatDialog);
+  private readonly attachmentService = inject(AttachmentService);
+  private readonly pdfService = inject(PdfService);
+  private readonly docRepo = inject(ProjectDocumentRepository);
+  private readonly authService = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly stepper = viewChild<MatStepper>('stepper');
@@ -92,6 +95,7 @@ export class ProjectWorkspaceComponent implements OnInit {
   readonly project = signal<Project | null>(null);
   readonly files = signal<WorkspaceFile[]>([]);
   readonly draftSaved = signal(false);
+  readonly generatingPdf = signal(false);
   readonly fileColumns = ['name', 'type', 'size', 'uploadedAt', 'actions'];
 
   readonly lifecycleOptions = LIFECYCLE_OPTIONS;
@@ -194,16 +198,32 @@ export class ProjectWorkspaceComponent implements OnInit {
 
   restoreDraft(): void {
     const draft = this.draftService.load(this.projectId);
-    if (!draft) return;
-    this.form.patchValue(draft.formData);
+    if (draft) {
+      this.form.patchValue(draft.formData);
+      this.files.set(
+        draft.attachments.map((f) => ({
+          ...f,
+          uploadedAt: new Date(f.uploadedAt),
+        })),
+      );
+      this.draftSaved.set(true);
+      return;
+    }
+
+    // Editing a completed project: pre-populate from the latest official version.
+    const latest = this.docRepo.getLatestVersion(this.projectId);
+    if (!latest) return;
+    this.form.patchValue(latest.formData);
     this.files.set(
-      draft.attachments.map((f) => ({
+      latest.attachments.map((f) => ({
         ...f,
         uploadedAt: new Date(f.uploadedAt),
       })),
     );
-    // A loaded draft exists; show the saved badge.
-    this.draftSaved.set(true);
+  }
+
+  hasOfficialVersion(): boolean {
+    return this.docRepo.hasOfficialVersion(this.projectId);
   }
 
   saveDraft(showToast = true): void {
@@ -250,18 +270,7 @@ export class ProjectWorkspaceComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
     const selected = Array.from(input.files);
-    this.files.update((existing) => [
-      ...existing,
-      ...selected.map((file) => ({
-        name: file.name,
-        type: file.type || 'application/octet-stream',
-        size: file.size,
-        uploadedAt: new Date(),
-        objectUrl: URL.createObjectURL(file),
-      })),
-    ]);
-    this.saveDraft(false);
-    this.notification.success(`${selected.length} file(s) added`);
+    void this.addAndUploadFiles(selected);
     input.value = '';
   }
 
@@ -269,19 +278,39 @@ export class ProjectWorkspaceComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
     const file = input.files[0];
-    this.files.update((existing) => [
-      ...existing,
-      {
-        name: file.name,
-        type: file.type || 'image/png',
-        size: file.size,
-        uploadedAt: new Date(),
-        objectUrl: URL.createObjectURL(file),
-      },
-    ]);
-    this.saveDraft(false);
-    this.notification.success('Module diagram uploaded');
+    void this.addAndUploadFiles([file], 'Module diagram uploaded');
     input.value = '';
+  }
+
+  private async addAndUploadFiles(selected: File[], successMessage?: string): Promise<void> {
+    const mapped = selected.map((file) => ({
+      name: file.name,
+      type: file.type || 'application/octet-stream',
+      size: file.size,
+      uploadedAt: new Date(),
+      objectUrl: URL.createObjectURL(file),
+      file,
+    }));
+    this.files.update((existing) => [...existing, ...mapped]);
+    this.saveDraft(false);
+
+    for (const item of mapped) {
+      if (!item.file) continue;
+      try {
+        const res = await firstValueFrom(this.attachmentService.uploadFile(this.projectId, item.file));
+        if (res.success && res.data) {
+          this.files.update((list) =>
+            list.map((f) => (f === item || (f.name === item.name && f.size === item.size && !f.serverId)
+              ? { ...f, serverId: res.data!.id }
+              : f)),
+          );
+        }
+      } catch {
+        this.notification.error(`Failed to upload ${item.name}. It may be missing from the PDF.`);
+      }
+    }
+
+    this.notification.success(successMessage ?? `${selected.length} file(s) added`);
   }
 
   private isPngJpegFile(f: WorkspaceFile): boolean {
@@ -336,198 +365,119 @@ export class ProjectWorkspaceComponent implements OnInit {
     if (s) s.selectedIndex = step;
   }
 
-  generatePpt(): void {
-    // Ensure the latest draft state is persisted before generation placeholders run.
-    this.saveDraft(false);
-    this.notification.info('PowerPoint generation will be available in a future release.');
-  }
-
-  generateWord(): void {
-    this.saveDraft(false);
-    this.notification.info('Word document generation will be available in a future release.');
-  }
-
   generatePdf(): void {
+    void this.runGeneratePdf();
+  }
+
+  private async runGeneratePdf(): Promise<void> {
     this.saveDraft(false);
-    this.notification.info('PDF generation will be available in a future release.');
-  }
+    this.generatingPdf.set(true);
 
-  submitWorkspace(): void {
-    // Backward compat: keep old method name (in case it is referenced elsewhere).
-    this.reviewAndSave();
-  }
+    try {
+      for (const item of this.files()) {
+        if (item.serverId || !item.file) continue;
+        try {
+          const res = await firstValueFrom(this.attachmentService.uploadFile(this.projectId, item.file));
+          if (res.success && res.data) {
+            this.files.update((list) =>
+              list.map((f) => (f === item ? { ...f, serverId: res.data!.id } : f)),
+            );
+          }
+        } catch {
+          this.notification.error(`Failed to upload ${item.name}`);
+        }
+      }
 
-  private readonly docRepo = inject(ProjectDocumentRepository);
-
-  reviewAndSave(): void {
-    const formData = this.form.getRawValue() as Record<string, unknown>;
-
-    const controlLabels: Record<string, string> = {
-      applicationPurpose: 'What does this application do?',
-      isSourceOfTruth: 'Will this application be the Source of Truth (SOT)?',
-      hasUatEnvironment: 'Do we have the UAT environment to build/test/freeze the connectors?',
-      uatServer: 'server',
-      uatUsername: 'username',
-      uatPassword: 'password',
-      applicationType: 'What type of application is it?',
-      connectionMethod: 'How do we connect to this application?',
-      isLegacyApplication: 'Is this a legacy application or web application?',
-      legacyDetails: 'Legacy / Client Details',
-
-      lifecycleFeatures: 'Which lifecycle management features are required?',
-      userOnboardingRequired: 'Is user required to be on-boarded on the application?',
-      userOnboardingDetails: 'On-boarding Details',
-      userModificationRequired: 'Is user required to be modified on the application?',
-      userModificationDetails: 'Modification Details',
-      userDeletionRequired: 'Is user deletion required on the application?',
-      userDeletionDetails: 'Deletion Details',
-      deleteType: 'Is the removal of user a soft delete or hard delete?',
-      userReactivationRequired: 'Is the user required to be reactivated?',
-      reactivationMethod: 'Reactivation Method',
-      ssoRequired: 'Will there be SSO?',
-      ssoType: 'What type of SSO will be used for this application?',
-      reconStrategy: 'What is the recon strategy that will be used for this application?',
-      defaultEntitlement: 'While creating a user, does that user need to be assigned to some default entitlement?',
-      reconUserTypes: 'While reconciliation are the active users & the disable users coming in the same request?',
-      entitlementTypes: 'Will the user be assigned to multiple types of entitlements or only one type?',
-
-      ciPackage: 'Which CI Package will be getting implemented?',
-      ciIntegrationRole: 'How will it relate to the CI once integrated?',
-      moduleDiagramNotes: 'Module Diagram of integration of this application with CI',
-
-      sotOnboardingStrategy: 'What is the SOT on-boarding strategy that will be used?',
-      onboardingScan: 'What is the on-boarding scan that will be configured?',
-      sotAttributes: 'What are the attributes of the SOT that will be used for this application?',
-      additionalSotAttributes: 'Additional SOT Attributes',
-
-      encryptedFields: 'Which fields of the user details are encrypted?',
-      apiPayloadEncrypted: 'Are the api payloads encrypted?',
-      encodedFields: 'Which fields are encoded?',
-      encryptionAlgorithm: 'Is there any specific standard encryption algorithm used?',
-
-      apiDocumentationLink: 'Attach the api documentation for the collection',
-      specialComments: 'Special Comments (If Any)',
-    };
-
-    const formatValue = (v: unknown): string => {
-      if (Array.isArray(v)) return v.filter(Boolean).join(', ');
-      if (v === null || v === undefined) return '';
-      if (typeof v === 'string') return v.trim();
-      return String(v);
-    };
-
-    const toItems = (keys: string[]): ReviewSaveDialogSection['items'] => {
-      return keys
-        .map((k) => ({
-          label: controlLabels[k] ?? k,
-          value: formatValue(formData[k]),
-        }))
-        .filter((x) => x.value);
-    };
-
-    const sections: ReviewSaveDialogSection[] = [
-      {
-        title: 'About Application',
-        items: toItems([
-          'applicationPurpose',
-          'isSourceOfTruth',
-          'hasUatEnvironment',
-          'uatServer',
-          'uatUsername',
-          'uatPassword',
-          'applicationType',
-          'connectionMethod',
-          'isLegacyApplication',
-          'legacyDetails',
-        ]),
-      },
-      {
-        title: 'Application Integration',
-        items: toItems([
-          'lifecycleFeatures',
-          'userOnboardingRequired',
-          'userOnboardingDetails',
-          'userModificationRequired',
-          'userModificationDetails',
-          'userDeletionRequired',
-          'userDeletionDetails',
-          'deleteType',
-          'userReactivationRequired',
-          'reactivationMethod',
-          'ssoRequired',
-          'ssoType',
-          'reconStrategy',
-          'defaultEntitlement',
-          'reconUserTypes',
-          'entitlementTypes',
-        ]),
-      },
-      {
-        title: 'Converged Identity',
-        items: toItems(['ciPackage', 'ciIntegrationRole', 'moduleDiagramNotes']),
-      },
-      {
-        title: 'Source Of Truth',
-        items: toItems(['sotOnboardingStrategy', 'onboardingScan', 'sotAttributes', 'additionalSotAttributes']),
-      },
-      {
-        title: 'Encryption',
-        items: toItems(['encryptedFields', 'apiPayloadEncrypted', 'encodedFields', 'encryptionAlgorithm']),
-      },
-      {
-        title: 'General Information',
-        items: toItems(['apiDocumentationLink']),
-      },
-      {
-        title: 'Special Comments',
-        items: toItems(['specialComments']),
-      },
-    ];
-
-    const attachments = this.files().map((f) => f.name);
-    const existingVersions = this.docRepo.getVersions(this.projectId);
-    const isChangeRequest = existingVersions.length > 0;
-
-    const ref = this.dialog.open(ReviewSaveDialogComponent, {
-      width: '980px',
-      data: {
-        title: 'Review Connector Information Gathering',
-        sections,
-        attachments,
-        note: isChangeRequest
-          ? 'You are editing an approved Connector Information Gathering Document. Saving these changes will create a new version as a Change Request.'
-          : 'Once you click Review & Save, this becomes the official Version 1 of the Connector Information Gathering Document.',
-      },
-    });
-
-    ref.afterClosed().subscribe((confirmed) => {
-      if (!confirmed) return;
-
-      // Persist the latest draft right before committing the official version.
+      const rawForm = this.form.getRawValue() as Record<string, unknown>;
       const attachmentsMeta = this.files().map((f) => ({
         name: f.name,
         type: f.type,
         size: f.size,
         uploadedAt: f.uploadedAt.toISOString(),
       }));
-
       const completionPercent = this.completionPercent();
-      this.draftService.save(this.projectId, formData, attachmentsMeta, completionPercent);
+      const user = this.authService.user();
+      const changedBy = user?.fullName || user?.email || 'Unknown';
 
       const version = this.docRepo.saveVersion({
         projectId: this.projectId,
-        formData,
+        formData: rawForm,
         attachments: attachmentsMeta,
         completionPercent,
+        changedBy,
       });
 
-      // Once the official save is done and completion is 100%, remove the draft from the app.
+      this.docRepo.addGeneratedDocument({
+        projectId: this.projectId,
+        versionNumber: version.versionNumber,
+        docType: 'pdf',
+        fileName: `CIGT_v${version.versionNumber}.pdf`,
+        includedAttachmentNames: attachmentsMeta.map((a) => a.name),
+      });
+
+      const project = this.project();
+      if (project) {
+        try {
+          await firstValueFrom(
+            this.projectService.update(this.projectId, {
+              name: project.name,
+              clientName: project.clientName,
+              applicationName: project.applicationName,
+              status: 'Completed',
+            }),
+          );
+        } catch {
+          // Version/PDF still succeed even if status update fails.
+        }
+      }
+
+      const formData = this.toStringMap(rawForm);
+      const blob = await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
+      const fileName = `CIGT_${project?.clientName || 'Client'}_${project?.applicationName || 'Application'}_v${version.versionNumber}.pdf`.replace(
+        /[^\w.\-]+/g,
+        '_',
+      );
+      this.downloadBlob(blob, fileName);
+
       if (completionPercent >= 100) {
         this.draftService.clear(this.projectId);
       }
 
-      this.notification.success(`Saved Version ${version.versionNumber} (${version.saveType})`);
-      this.router.navigate(['/project', this.projectId]);
-    });
+      const label =
+        version.saveType === 'Official'
+          ? 'Version 1 saved. Redirecting to review…'
+          : `${version.changeRequestId} (Version ${version.versionNumber}) saved. Redirecting to review…`;
+      this.notification.success(label);
+      await this.router.navigate(['/project', this.projectId]);
+    } catch {
+      this.notification.error('PDF generation failed. Please try again.');
+    } finally {
+      this.generatingPdf.set(false);
+    }
+  }
+
+  private toStringMap(raw: Record<string, unknown>): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (value === null || value === undefined) continue;
+      if (Array.isArray(value)) {
+        const joined = value.filter(Boolean).map(String).join(', ');
+        if (joined) result[key] = joined;
+        continue;
+      }
+      const text = String(value).trim();
+      if (text) result[key] = text;
+    }
+    return result;
+  }
+
+  private downloadBlob(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.rel = 'noopener';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }

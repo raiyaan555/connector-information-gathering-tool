@@ -1,0 +1,13 @@
+# Local uploads and generated PDFs
+API/App_Data/
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Node / Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/

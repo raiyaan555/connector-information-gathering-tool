@@ -45,7 +45,6 @@
           <a class="application-row__link" [routerLink]="['/project', app.id]">
             <div class="application-row__main">
               <span class="application-row__name">{{ app.applicationName || app.name }}</span>
-              <span class="application-row__status">{{ app.status }}</span>
             </div>
             <span class="application-row__updated">{{ app.updatedAt | date: 'mediumDate' }}</span>
           </a>

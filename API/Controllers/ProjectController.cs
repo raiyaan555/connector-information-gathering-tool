@@ -1,11 +1,13 @@
 using API.DTOs;
 using API.Models;
 using API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/projects")]
 public class ProjectController : ControllerBase
 {
@@ -17,44 +19,53 @@ public class ProjectController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<ApiResponse<IEnumerable<ProjectDto>>> GetAll()
+    public async Task<ActionResult<ApiResponse<IEnumerable<ProjectDto>>>> GetAll(CancellationToken cancellationToken)
     {
-        var result = _projectService.GetAll();
+        var result = await _projectService.GetAllAsync(cancellationToken);
         return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
-    public ActionResult<ApiResponse<ProjectDto>> GetById(Guid id)
+    public async Task<ActionResult<ApiResponse<ProjectDto>>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var result = _projectService.GetById(id);
+        var result = await _projectService.GetByIdAsync(id, cancellationToken);
         return result.Success ? Ok(result) : NotFound(result);
     }
 
     [HttpPost]
-    public ActionResult<ApiResponse<ProjectDto>> Create([FromBody] CreateProjectRequest request)
+    public async Task<ActionResult<ApiResponse<ProjectDto>>> Create(
+        [FromBody] CreateProjectRequest request,
+        CancellationToken cancellationToken)
     {
-        var result = _projectService.Create(request);
-        return result.Success ? CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result) : BadRequest(result);
+        var result = await _projectService.CreateAsync(request, cancellationToken);
+        return result.Success
+            ? CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result)
+            : BadRequest(result);
     }
 
     [HttpPut("{id:guid}")]
-    public ActionResult<ApiResponse<ProjectDto>> Update(Guid id, [FromBody] UpdateProjectRequest request)
+    public async Task<ActionResult<ApiResponse<ProjectDto>>> Update(
+        Guid id,
+        [FromBody] UpdateProjectRequest request,
+        CancellationToken cancellationToken)
     {
-        var result = _projectService.Update(id, request);
+        var result = await _projectService.UpdateAsync(id, request, cancellationToken);
         return result.Success ? Ok(result) : NotFound(result);
     }
 
     [HttpDelete("{id:guid}")]
-    public ActionResult<ApiResponse<MessageResponse>> Delete(Guid id)
+    public async Task<ActionResult<ApiResponse<MessageResponse>>> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var result = _projectService.Delete(id);
+        var result = await _projectService.DeleteAsync(id, cancellationToken);
         return result.Success ? Ok(result) : NotFound(result);
     }
 
     [HttpPost("{id:guid}/generate-link")]
-    public ActionResult<ApiResponse<GenerateLinkResponse>> GenerateLink(Guid id)
+    public async Task<ActionResult<ApiResponse<GenerateLinkResponse>>> GenerateLink(
+        Guid id,
+        CancellationToken cancellationToken)
     {
-        var result = _projectService.GenerateLink(id);
+        var result = await _projectService.GenerateLinkAsync(id, cancellationToken);
         return result.Success ? Ok(result) : NotFound(result);
     }
 }

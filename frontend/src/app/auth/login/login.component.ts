@@ -38,7 +38,7 @@ export class LoginComponent {
   readonly hidePassword = signal(true);
 
   readonly form = this.fb.nonNullable.group({
-    email: ['', [Validators.required, Validators.email, Validators.pattern(/@theconnector\.com$/)]],
+    email: ['', [Validators.required, Validators.email, Validators.pattern(/@arconnet\.com$/)]],
     password: ['', [Validators.required, Validators.minLength(8)]],
     rememberMe: [false],
   });

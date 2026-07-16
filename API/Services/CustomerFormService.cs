@@ -4,6 +4,13 @@ using API.Repositories;
 
 namespace API.Services;
 
+public interface ICustomerFormService
+{
+    Task<ApiResponse<CustomerFormDto>> GetFormByTokenAsync(string token, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CustomerFormResponseDto>> SubmitFormAsync(string token, SubmitCustomerFormRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<IEnumerable<CustomerFormResponseDto>>> GetResponsesByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
+}
+
 public class CustomerFormService : ICustomerFormService
 {
     private readonly IProjectRepository _projectRepository;
@@ -17,13 +24,13 @@ public class CustomerFormService : ICustomerFormService
         _customerFormRepository = customerFormRepository;
     }
 
-    public ApiResponse<CustomerFormDto> GetFormByToken(string token)
+    public async Task<ApiResponse<CustomerFormDto>> GetFormByTokenAsync(string token, CancellationToken cancellationToken = default)
     {
-        var project = _projectRepository.GetByToken(token);
+        var project = await _projectRepository.GetByTokenAsync(token, cancellationToken);
         if (project is null)
             return ApiResponse<CustomerFormDto>.Fail("Invalid or expired form token.");
 
-        var existingResponse = _customerFormRepository.GetByToken(token);
+        var existingResponse = await _customerFormRepository.GetByTokenAsync(token, cancellationToken);
 
         return ApiResponse<CustomerFormDto>.Ok(new CustomerFormDto
         {
@@ -36,20 +43,23 @@ public class CustomerFormService : ICustomerFormService
         });
     }
 
-    public ApiResponse<CustomerFormResponseDto> SubmitForm(string token, SubmitCustomerFormRequest request)
+    public async Task<ApiResponse<CustomerFormResponseDto>> SubmitFormAsync(
+        string token,
+        SubmitCustomerFormRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var project = _projectRepository.GetByToken(token);
+        var project = await _projectRepository.GetByTokenAsync(token, cancellationToken);
         if (project is null)
             return ApiResponse<CustomerFormResponseDto>.Fail("Invalid or expired form token.");
 
         if (request.FormData is null || request.FormData.Count == 0)
             return ApiResponse<CustomerFormResponseDto>.Fail("Form data is required.");
 
-        var existingResponse = _customerFormRepository.GetByToken(token);
+        var existingResponse = await _customerFormRepository.GetByTokenAsync(token, cancellationToken);
         if (existingResponse is not null)
             return ApiResponse<CustomerFormResponseDto>.Fail("This form has already been submitted.");
 
-        var response = new CustomerFormResponse
+        var response = new CustomerForm
         {
             Id = Guid.NewGuid(),
             ProjectId = project.Id,
@@ -58,24 +68,26 @@ public class CustomerFormService : ICustomerFormService
             SubmittedAt = DateTime.UtcNow
         };
 
-        _customerFormRepository.Add(response);
+        await _customerFormRepository.AddAsync(response, cancellationToken);
 
         return ApiResponse<CustomerFormResponseDto>.Ok(
             MapToDto(response),
             "Form submitted successfully.");
     }
 
-    public ApiResponse<IEnumerable<CustomerFormResponseDto>> GetResponsesByProjectId(Guid projectId)
+    public async Task<ApiResponse<IEnumerable<CustomerFormResponseDto>>> GetResponsesByProjectIdAsync(
+        Guid projectId,
+        CancellationToken cancellationToken = default)
     {
-        var project = _projectRepository.GetById(projectId);
+        var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
         if (project is null)
             return ApiResponse<IEnumerable<CustomerFormResponseDto>>.Fail("Project not found.");
 
-        var responses = _customerFormRepository.GetByProjectId(projectId).Select(MapToDto);
-        return ApiResponse<IEnumerable<CustomerFormResponseDto>>.Ok(responses);
+        var responses = await _customerFormRepository.GetByProjectIdAsync(projectId, cancellationToken);
+        return ApiResponse<IEnumerable<CustomerFormResponseDto>>.Ok(responses.Select(MapToDto));
     }
 
-    private static CustomerFormResponseDto MapToDto(CustomerFormResponse response) => new()
+    private static CustomerFormResponseDto MapToDto(CustomerForm response) => new()
     {
         Id = response.Id,
         ProjectId = response.ProjectId,
