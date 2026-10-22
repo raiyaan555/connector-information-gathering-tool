@@ -420,7 +420,8 @@
                 </button>
 
                 <p class="upload-area__note">
-                  Uploaded files will be managed under the <strong>Attachments</strong> section.
+                  Allowed: PDF, DOCX, JPG, PNG, and JSON. Uploaded files are listed under <strong>Attachments</strong>.
+                  PDF, DOCX, and images are merged into the generated PDF. A JSON file is included in a CIGT zip with that PDF.
                 </p>
 
                 @if (files().length) {
@@ -459,7 +460,7 @@
         <mat-step [stepControl]="form">
             <div class="step-content">
               <h2>Attachments</h2>
-              <p class="step-desc">Upload Postman collections, API documentation, module diagrams, screenshots, and any supporting files.</p>
+              <p class="step-desc">Upload PDF, DOCX, JPG, PNG, or JSON files only. PDF, DOCX, and images are merged into the generated PDF. JSON files are downloaded with that PDF in a zip named CIGT_Client_Application.</p>
               <app-sample-hint [text]="hints['postmanCollection'] + ' · ' + hints['apiScreenshots']" />
               <div class="upload-area">
                 <input type="file" #fileInput hidden multiple (change)="onFileSelected($event)" [accept]="allowedTypes" />
@@ -562,6 +563,9 @@
                 </ul>
               }
             </div>
+            <p class="upload-area__note">
+              PDF, DOCX, and images are merged into the PDF. If a JSON file is attached, the download is a zip named CIGT_Client_Application containing that PDF and the JSON files.
+            </p>
             <div class="step-actions">
               <button mat-button type="button" matStepperPrevious>Previous</button>
               <button mat-stroked-button type="button" (click)="saveDraft()">Save Draft</button>

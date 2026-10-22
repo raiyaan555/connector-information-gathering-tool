@@ -100,14 +100,17 @@ Log in with:
 2. Use the search bar at the top to find a client or application.
 3. Click **Add Client** to create a new customer container.
 4. On a client card, click **Add Application** to start a new connector project.
-5. Open an existing application to see the document workspace. From there you can review details and use **Download PDF**.
-6. The customer form is a public page (no login). One sample link is already seeded:
+5. Open an existing application to see the document workspace. From there you can review details and use **Download PDF**. Attachments can be PDF, DOCX, JPG, PNG, or JSON only. PDF, DOCX, and images are merged into the PDF. If a JSON file was uploaded, the download is a zip named `CIGT_Client_Application` containing the PDF and the JSON files.
+6. **Attach Jira Ticket** saves a Jira issue key or link on that application. It shows on the project overview and is printed on the PDF.
+7. **Share to Connector Team** opens a message you can edit, then opens Outlook in the browser already addressed to the CI Connectors Team group (`ciconnectorsteam@arconnet.com`). The PDF or CIGT zip downloads at the same time. Drop that file onto the Outlook message and press Send. The app does not send the email itself.
+8. The customer form is a public page (no login). One sample link is already seeded:
 
    http://localhost:4200/form/a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
-7. Click **Logout** in the top right when you are done.
+9. The admin account also has a **Users** button in the top bar. That page lists accounts and can create an Engineer, Viewer, or Admin. Other signed-in users do not see it.
+10. Click **Logout** in the top right when you are done.
 
-New company accounts must use an email that ends with `@arconnet.com`. Passwords need at least 8 characters, one uppercase letter, one lowercase letter, and one number.
+New company accounts must use an email that ends with `@arconnet.com`. The public Register page always creates an Engineer. Passwords need at least 8 characters, one uppercase letter, one lowercase letter, and one number.
 
 ## How to stop
 

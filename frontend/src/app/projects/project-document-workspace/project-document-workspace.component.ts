@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { DatePipe } from '@angular/common';
+import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 
 import { ProjectService } from '../../services/project.service';
@@ -17,8 +18,10 @@ import {
   AttachmentMeta,
   ProjectVersionEntry,
 } from '../../services/project-document.repository';
-import { PdfService } from '../../services/pdf.service';
+import { cigtDownloadName, PdfService } from '../../services/pdf.service';
 import { Project } from '../../models/project.model';
+import { JiraTicketDialogComponent, jiraTicketHref, jiraTicketLabel } from './jira-ticket-dialog.component';
+import { ShareConnectorDialogComponent } from './share-connector-dialog.component';
 
 type SectionKey = 'about' | 'integration' | 'ci' | 'sot' | 'encryption' | 'general' | 'comments' | 'attachments' | 'review';
 
@@ -178,6 +181,7 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
   readonly draftService = inject(WorkspaceDraftService);
   private readonly docRepo = inject(ProjectDocumentRepository);
   private readonly pdfService = inject(PdfService);
+  private readonly dialog = inject(MatDialog);
 
   readonly projectId = this.route.snapshot.paramMap.get('id')!;
 
@@ -191,6 +195,10 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
   readonly selectedVersionNumber = signal<number | null>(null);
   readonly downloadingPdf = signal(false);
   readonly sharingEmail = signal(false);
+  readonly savingJira = signal(false);
+  readonly jiraTicket = computed(() => this.project()?.jiraTicket?.trim() || '');
+  readonly jiraHref = computed(() => jiraTicketHref(this.jiraTicket()));
+  readonly jiraLabel = computed(() => jiraTicketLabel(this.jiraTicket()));
 
   readonly sectionDefs = SECTION_DEFS;
 
@@ -205,6 +213,10 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
       completionPercent: version.completionPercent,
     };
   });
+
+  readonly includesJson = computed(() =>
+    (this.snapshot()?.attachments ?? []).some((file) => file.name.trim().toLowerCase().endsWith('.json')),
+  );
 
   readonly isReadOnlyVersion = computed(() => {
     const versions = this.versions();
@@ -285,11 +297,14 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
     this.downloadingPdf.set(true);
     try {
       const formData = this.toStringMap(snap.formData);
-      const blob = await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
+      const response = await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
+      const blob = response.body;
+      if (!blob) throw new Error('Empty download');
       const project = this.project();
-      const fileName = `CIGT_${project?.clientName || 'Client'}_${project?.applicationName || 'Application'}.pdf`.replace(
-        /[^\w.\-]+/g,
-        '_',
+      const fileName = cigtDownloadName(
+        response,
+        project?.clientName || 'Client',
+        project?.applicationName || 'Application',
       );
       this.downloadBlob(blob, fileName);
 
@@ -304,11 +319,45 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
         });
       }
 
-      this.notification.success('PDF downloaded');
+      this.notification.success(
+        fileName.toLowerCase().endsWith('.zip')
+          ? 'CIGT zip downloaded. It contains the PDF and the JSON files.'
+          : 'PDF downloaded',
+      );
     } catch {
       this.notification.error('PDF download failed. Please try again.');
     } finally {
       this.downloadingPdf.set(false);
+    }
+  }
+
+  async attachJiraTicket(): Promise<void> {
+    if (this.isReadOnlyVersion()) {
+      this.notification.info('Switch to the active version to attach a Jira ticket.');
+      return;
+    }
+
+    const result = await firstValueFrom(
+      this.dialog.open(JiraTicketDialogComponent, {
+        data: { initialValue: this.jiraTicket() },
+        width: '480px',
+      }).afterClosed(),
+    );
+    if (result === undefined) return;
+
+    this.savingJira.set(true);
+    try {
+      const response = await firstValueFrom(this.projectService.setJiraTicket(this.projectId, result));
+      if (!response.success || !response.data) {
+        this.notification.error(response.message || 'Could not save the Jira ticket.');
+        return;
+      }
+      this.project.set(response.data);
+      this.notification.success(response.message || 'Jira ticket saved on this application.');
+    } catch (error) {
+      this.notification.error(apiErrorMessage(error, 'Could not save the Jira ticket.'));
+    } finally {
+      this.savingJira.set(false);
     }
   }
 
@@ -320,25 +369,79 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
 
     this.sharingEmail.set(true);
     try {
-      // Ensure latest PDF exists on the server before building the .eml draft.
-      const snap = this.snapshot();
-      if (snap) {
-        const formData = this.toStringMap(snap.formData);
-        await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
+      const response = await firstValueFrom(this.pdfService.shareCompose(this.projectId));
+      if (!response.success || !response.data) {
+        this.notification.error(response.message || 'Could not open Outlook. Please try again.');
+        return;
       }
 
-      const eml = await firstValueFrom(this.pdfService.shareEmail(this.projectId));
-      const project = this.project();
-      const emlName = `Share_${project?.applicationName || 'Connector'}.eml`.replace(/[^\w.\-]+/g, '_');
-      this.downloadBlob(eml, emlName);
-      this.notification.success(
-        'Outlook draft downloaded. Open the .eml file to review and send — the PDF is already attached.',
+      const compose = response.data;
+      const result = await firstValueFrom(
+        this.dialog.open(ShareConnectorDialogComponent, {
+          data: {
+            toName: compose.toName,
+            toAddress: compose.to,
+            subject: compose.subject,
+            message: compose.body,
+            attachmentFileName: compose.attachmentFileName,
+            jiraTicket: this.jiraLabel() || this.jiraTicket(),
+            prepareFile: () => this.prepareShareFile(),
+          },
+          width: '600px',
+          autoFocus: 'first-tabbable',
+        }).afterClosed(),
       );
-    } catch {
-      this.notification.error('Could not prepare the email draft. Please try again.');
+
+      if (!result?.fileName) return;
+      const dropped = result.fileName.toLowerCase().endsWith('.zip')
+        ? `${result.fileName} downloaded. It contains the PDF and the JSON files.`
+        : `${result.fileName} downloaded.`;
+      this.notification.success(
+        result.openedInBrowser
+          ? `Outlook opened for ${compose.toName}. ${dropped} Drop that file onto the message, then send.`
+          : dropped,
+        8000,
+      );
+    } catch (error) {
+      this.notification.error(apiErrorMessage(error, 'Could not open Outlook. Please try again.'));
     } finally {
       this.sharingEmail.set(false);
     }
+  }
+
+  private async prepareShareFile(): Promise<string> {
+    const snap = this.snapshot();
+    if (!snap) throw new Error('No saved information available to generate a PDF.');
+
+    let response;
+    try {
+      response = await firstValueFrom(this.pdfService.generatePdf(this.projectId, this.toStringMap(snap.formData)));
+    } catch {
+      throw new Error('Could not prepare the CIGT file. Please try again.');
+    }
+
+    const blob = response.body;
+    if (!blob) throw new Error('Could not prepare the CIGT file. Please try again.');
+    const project = this.project();
+    const fileName = cigtDownloadName(
+      response,
+      project?.clientName || 'Client',
+      project?.applicationName || 'Application',
+    );
+    this.downloadBlob(blob, fileName);
+
+    const versionNumber = this.selectedVersionNumber() ?? this.versions()[0]?.versionNumber;
+    if (versionNumber != null) {
+      this.docRepo.addGeneratedDocument({
+        projectId: this.projectId,
+        versionNumber,
+        docType: 'pdf',
+        fileName,
+        includedAttachmentNames: snap.attachments.map((a) => a.name),
+      });
+    }
+
+    return fileName;
   }
 
   sectionValue(
@@ -377,4 +480,12 @@ export class ProjectDocumentWorkspaceComponent implements OnInit {
     a.click();
     URL.revokeObjectURL(url);
   }
+}
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error && 'error' in error) {
+    const body = (error as { error?: { message?: string } }).error;
+    if (body && typeof body.message === 'string' && body.message.trim()) return body.message;
+  }
+  return fallback;
 }

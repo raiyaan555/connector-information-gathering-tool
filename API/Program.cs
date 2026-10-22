@@ -89,10 +89,12 @@ builder.Services.AddCors(options =>
             ?? ["http://localhost:4200"];
         policy.WithOrigins(origins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .WithExposedHeaders("Content-Disposition");
     });
 });
 
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ICustomerFormRepository, CustomerFormRepository>();
@@ -105,6 +107,7 @@ builder.Services.AddScoped<IConnectorPdfService, ConnectorPdfService>();
 
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUserAdminService, UserAdminService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<ICustomerFormService, CustomerFormService>();

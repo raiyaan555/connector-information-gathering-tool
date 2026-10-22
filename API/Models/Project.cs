@@ -15,9 +15,11 @@ public class Project
     public ProjectStatus Status { get; set; }
     public string? FormToken { get; set; }
     public string? FormLink { get; set; }
+    public string? JiraTicket { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
+    public string OwnerUserId { get; set; } = string.Empty;
 
     public Client? Client { get; set; }
     public ICollection<CustomerForm> CustomerForms { get; set; } = new List<CustomerForm>();

@@ -16,6 +16,7 @@ public class ProjectDto
     public string Status { get; set; } = string.Empty;
     public string? FormToken { get; set; }
     public string? FormLink { get; set; }
+    public string? JiraTicket { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string CreatedBy { get; set; } = string.Empty;
@@ -39,6 +40,11 @@ public class UpdateProjectRequest
     public string ClientName { get; set; } = string.Empty;
     public string ApplicationName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+}
+
+public class SetJiraTicketRequest
+{
+    public string? Ticket { get; set; }
 }
 
 public class GenerateLinkResponse

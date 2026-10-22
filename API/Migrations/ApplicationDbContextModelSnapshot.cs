@@ -178,6 +178,11 @@ namespace API.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -194,6 +199,8 @@ namespace API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyName");
+
+                    b.HasIndex("OwnerUserId");
 
                     b.ToTable("Clients");
                 });
@@ -493,10 +500,19 @@ namespace API.Migrations
                     b.Property<string>("ImplementationEngineer")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("JiraTicket")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Priority")
                         .HasMaxLength(50)
@@ -519,6 +535,8 @@ namespace API.Migrations
                     b.HasIndex("FormToken")
                         .IsUnique()
                         .HasFilter("[FormToken] IS NOT NULL");
+
+                    b.HasIndex("OwnerUserId");
 
                     b.ToTable("Projects");
                 });

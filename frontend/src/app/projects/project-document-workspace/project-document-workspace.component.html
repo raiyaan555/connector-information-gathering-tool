@@ -53,7 +53,16 @@
       [disabled]="downloadingPdf() || !hasCompletedVersion()"
     >
       <mat-icon>picture_as_pdf</mat-icon>
-      {{ downloadingPdf() ? 'Downloading…' : 'Download PDF' }}
+      {{ downloadingPdf() ? 'Downloading…' : (includesJson() ? 'Download CIGT zip' : 'Download PDF') }}
+    </button>
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="attachJiraTicket()"
+      [disabled]="savingJira() || isReadOnlyVersion()"
+    >
+      <mat-icon>confirmation_number</mat-icon>
+      {{ savingJira() ? 'Saving…' : (jiraTicket() ? 'Update Jira Ticket' : 'Attach Jira Ticket') }}
     </button>
     <button
       mat-stroked-button
@@ -62,8 +71,13 @@
       [disabled]="sharingEmail() || !hasCompletedVersion() || isReadOnlyVersion()"
     >
       <mat-icon>mail</mat-icon>
-      {{ sharingEmail() ? 'Preparing…' : 'Share to Connector Team' }}
+      Share to Connector Team
     </button>
+    <p class="actions-note">
+      PDF, DOCX, and images are merged into the PDF. If a JSON file is attached, the download is a zip named CIGT_Client_Application with that PDF and the JSON files inside.
+      Share opens Outlook in your browser to the CI Connectors Team with a message you can edit, and downloads that PDF or zip for you to drop onto the message.
+      Attach Jira Ticket saves a ticket on this application and includes it in the message and the PDF.
+    </p>
   </div>
 
   <div class="doc-workspace__grid">
@@ -81,6 +95,18 @@
         <div class="kv">
           <span class="kv__k">Application Name</span>
           <span class="kv__v">{{ project()?.applicationName }}</span>
+        </div>
+        <div class="kv">
+          <span class="kv__k">Jira Ticket</span>
+          <span class="kv__v jira-value">
+            @if (jiraHref(); as href) {
+              <a class="jira-link" [href]="href" target="_blank" rel="noopener">{{ jiraLabel() }}</a>
+            } @else if (jiraTicket()) {
+              {{ jiraTicket() }}
+            } @else {
+              Not attached
+            }
+          </span>
         </div>
         <div class="kv">
           <span class="kv__k">Engineer</span>

@@ -10,6 +10,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../services/auth.service';
 import { NotificationService } from '../../services/notification.service';
 import { passwordPolicyValidator } from '../../validators/password-policy.validator';
+import { ARCON_EMAIL_PATTERN } from '../../validators/arcon-email.validator';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
   const password = control.get('password')?.value;
@@ -47,7 +48,7 @@ export class RegisterComponent {
     {
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
-      email: ['', [Validators.required, Validators.email, Validators.pattern(/@arconnet\.com$/)]],
+      email: ['', [Validators.required, Validators.email, Validators.pattern(ARCON_EMAIL_PATTERN)]],
       password: ['', [Validators.required, Validators.minLength(8), passwordPolicyValidator]],
       confirmPassword: ['', Validators.required],
     },

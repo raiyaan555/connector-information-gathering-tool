@@ -28,8 +28,12 @@ public static class DbSeeder
         }
 
         await EnsureRolesAsync(roleManager, cancellationToken);
-        await EnsureAdminUserAsync(userManager, logger, cancellationToken);
-        await EnsureSampleDataAsync(context, logger, cancellationToken);
+        var admin = await EnsureAdminUserAsync(userManager, logger, cancellationToken);
+        if (admin is not null)
+        {
+            await AssignUnownedRecordsAsync(context, admin.Id, cancellationToken);
+            await EnsureSampleDataAsync(context, logger, admin.Id, cancellationToken);
+        }
     }
 
     private static async Task EnsureRolesAsync(RoleManager<IdentityRole> roleManager, CancellationToken ct)
@@ -41,7 +45,7 @@ public static class DbSeeder
         }
     }
 
-    private static async Task EnsureAdminUserAsync(
+    private static async Task<ApplicationUser?> EnsureAdminUserAsync(
         UserManager<ApplicationUser> userManager,
         ILogger logger,
         CancellationToken ct)
@@ -49,7 +53,7 @@ public static class DbSeeder
         const string email = "admin@arconnet.com";
         var existing = await userManager.FindByEmailAsync(email);
         if (existing is not null)
-            return;
+            return existing;
 
         var admin = new ApplicationUser
         {
@@ -66,16 +70,50 @@ public static class DbSeeder
         {
             logger.LogError("Failed to seed admin user: {Errors}",
                 string.Join(", ", result.Errors.Select(e => e.Description)));
-            return;
+            return null;
         }
 
         await userManager.AddToRoleAsync(admin, "Admin");
         logger.LogInformation("Seeded admin user {Email}", email);
+        return admin;
+    }
+
+    private static async Task AssignUnownedRecordsAsync(
+        ApplicationDbContext context,
+        string adminUserId,
+        CancellationToken ct)
+    {
+        var clients = await context.Clients.Where(c => c.OwnerUserId == "").ToListAsync(ct);
+        foreach (var client in clients)
+            client.OwnerUserId = adminUserId;
+
+        if (clients.Count > 0)
+            await context.SaveChangesAsync(ct);
+
+        var projects = await context.Projects.Where(p => p.OwnerUserId == "").ToListAsync(ct);
+        if (projects.Count == 0)
+            return;
+
+        var owners = await context.Clients
+            .AsNoTracking()
+            .ToDictionaryAsync(c => c.Id, c => c.OwnerUserId, ct);
+
+        foreach (var project in projects)
+        {
+            project.OwnerUserId = project.ClientId is Guid clientId
+                && owners.TryGetValue(clientId, out var owner)
+                && !string.IsNullOrEmpty(owner)
+                ? owner
+                : adminUserId;
+        }
+
+        await context.SaveChangesAsync(ct);
     }
 
     private static async Task EnsureSampleDataAsync(
         ApplicationDbContext context,
         ILogger logger,
+        string adminUserId,
         CancellationToken ct)
     {
         if (await context.Clients.AnyAsync(ct))
@@ -218,6 +256,11 @@ public static class DbSeeder
                 UploadedBy = "admin@arconnet.com"
             },
         };
+
+        foreach (var client in clients)
+            client.OwnerUserId = adminUserId;
+        foreach (var project in projects)
+            project.OwnerUserId = adminUserId;
 
         context.Clients.AddRange(clients);
         context.Projects.AddRange(projects);

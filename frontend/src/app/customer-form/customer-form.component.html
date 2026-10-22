@@ -296,11 +296,11 @@
           <mat-step label="Attachments">
             <div class="step-content">
               <h2>Attachments</h2>
-              <p class="step-desc">Upload Swagger JSON/YAML, Postman Collection, PDF, DOCX, PNG, JPEG, or ZIP files.</p>
-              <p class="allowed-types">Allowed: {{ allowedTypes }}</p>
+              <p class="step-desc">Upload a PDF, DOCX, JPG, PNG, or JSON file. Other file types are not accepted.</p>
+              <p class="allowed-types">Allowed: {{ allowedLabel }}</p>
 
               <div class="upload-area">
-                <input type="file" #fileInput hidden (change)="onFileSelected($event)" [accept]="allowedTypes" />
+                <input type="file" #fileInput hidden (change)="onFileSelected($event)" [accept]="allowedAccept" />
                 <button mat-stroked-button type="button" (click)="fileInput.click()">
                   <mat-icon>upload_file</mat-icon>
                   Choose File

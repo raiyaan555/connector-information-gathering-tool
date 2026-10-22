@@ -17,6 +17,9 @@
         <span class="user-chip__avatar">{{ userInitials() }}</span>
         <span class="user-chip__name">{{ userName() }}</span>
       </div>
+      @if (isAdmin()) {
+        <a mat-stroked-button routerLink="/users">Users</a>
+      }
       <button mat-stroked-button type="button" (click)="logout()">Logout</button>
     </div>
   </header>

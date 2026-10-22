@@ -1,0 +1,18 @@
+---
+description: Keep CLAUDE.md, SKILLS.md, and the existing project docs true when behavior changes
+alwaysApply: true
+---
+
+# Keep project docs current
+
+When a change alters behavior, routes, roles, storage, auth, PDF, setup, or a production risk, update the existing docs in the same change. Do not leave them describing the old behavior.
+
+- `CLAUDE.md` — agent rules and easy-to-miss product rules
+- `SKILLS.md` — implementation rules. If you add a skill under `.cursor/skills/`, mention it here
+- `README.md` — features, status, setup, roadmap
+- `DEMO.md` — startup and what a person clicks
+- `docs/CIGT-Technical-Brief.md` — product shape and production risks
+
+Do not add a new markdown file for facts these already cover. `frontend/README.md` is the Angular CLI template. Touch it only when frontend run or build commands change.
+
+Follow `CLAUDE.md` and `SKILLS.md` before editing application code.

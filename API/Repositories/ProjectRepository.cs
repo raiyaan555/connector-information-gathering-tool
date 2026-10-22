@@ -10,17 +10,20 @@ public class ProjectRepository : IProjectRepository
 
     public ProjectRepository(ApplicationDbContext db) => _db = db;
 
-    public async Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Project>> GetAllAsync(string ownerUserId, CancellationToken cancellationToken = default)
     {
         return await _db.Projects
             .AsNoTracking()
+            .Where(p => p.OwnerUserId == ownerUserId)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<Project?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<Project?> GetByIdAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default)
     {
-        return await _db.Projects.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        return await _db.Projects.FirstOrDefaultAsync(
+            p => p.Id == id && p.OwnerUserId == ownerUserId,
+            cancellationToken);
     }
 
     public async Task<Project?> GetByTokenAsync(string token, CancellationToken cancellationToken = default)
@@ -43,19 +46,27 @@ public class ProjectRepository : IProjectRepository
         return project;
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default)
     {
-        var project = await _db.Projects.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var project = await _db.Projects.FirstOrDefaultAsync(
+            p => p.Id == id && p.OwnerUserId == ownerUserId,
+            cancellationToken);
         if (project is null) return false;
         _db.Projects.Remove(project);
         await _db.SaveChangesAsync(cancellationToken);
         return true;
     }
 
-    public async Task<int> DeleteByClientNameAsync(string clientName, CancellationToken cancellationToken = default)
+    public async Task<int> DeleteForClientAsync(
+        Guid clientId,
+        string clientName,
+        string ownerUserId,
+        CancellationToken cancellationToken = default)
     {
+        var name = clientName.ToLower();
         var projects = await _db.Projects
-            .Where(p => p.ClientName.ToLower() == clientName.ToLower())
+            .Where(p => p.OwnerUserId == ownerUserId
+                && (p.ClientId == clientId || (p.ClientId == null && p.ClientName.ToLower() == name)))
             .ToListAsync(cancellationToken);
 
         if (projects.Count == 0) return 0;

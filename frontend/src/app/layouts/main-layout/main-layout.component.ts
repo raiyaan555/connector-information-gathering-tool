@@ -34,6 +34,7 @@ export class MainLayoutComponent {
   });
 
   readonly userName = computed(() => this.authService.user()?.fullName ?? 'Admin User');
+  readonly isAdmin = this.authService.isAdmin;
 
   onSearch(query: string): void {
     this.router.navigate(['/dashboard'], { queryParams: { q: query || null } });

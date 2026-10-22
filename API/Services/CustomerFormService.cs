@@ -15,13 +15,16 @@ public class CustomerFormService : ICustomerFormService
 {
     private readonly IProjectRepository _projectRepository;
     private readonly ICustomerFormRepository _customerFormRepository;
+    private readonly ICurrentUser _currentUser;
 
     public CustomerFormService(
         IProjectRepository projectRepository,
-        ICustomerFormRepository customerFormRepository)
+        ICustomerFormRepository customerFormRepository,
+        ICurrentUser currentUser)
     {
         _projectRepository = projectRepository;
         _customerFormRepository = customerFormRepository;
+        _currentUser = currentUser;
     }
 
     public async Task<ApiResponse<CustomerFormDto>> GetFormByTokenAsync(string token, CancellationToken cancellationToken = default)
@@ -79,7 +82,11 @@ public class CustomerFormService : ICustomerFormService
         Guid projectId,
         CancellationToken cancellationToken = default)
     {
-        var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+        var ownerId = _currentUser.UserId;
+        if (string.IsNullOrWhiteSpace(ownerId))
+            return ApiResponse<IEnumerable<CustomerFormResponseDto>>.Fail("You are not signed in.");
+
+        var project = await _projectRepository.GetByIdAsync(projectId, ownerId, cancellationToken);
         if (project is null)
             return ApiResponse<IEnumerable<CustomerFormResponseDto>>.Fail("Project not found.");
 

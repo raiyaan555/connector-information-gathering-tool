@@ -24,27 +24,29 @@ public class PdfController : ControllerBase
         [FromBody] GeneratePdfRequest request,
         CancellationToken cancellationToken)
     {
-        var (success, error, pdfBytes, fileName) = await _pdfService.GenerateAsync(
+        var (success, error, fileBytes, fileName, contentType) = await _pdfService.GenerateAsync(
             projectId,
             request.FormData,
             cancellationToken);
 
-        if (!success || pdfBytes is null)
+        if (!success || fileBytes is null)
             return BadRequest(ApiResponse<object>.Fail(error ?? "PDF generation failed."));
 
-        return File(pdfBytes, "application/pdf", fileName ?? "ConnectorDocument.pdf");
+        return File(fileBytes, contentType ?? "application/pdf", fileName ?? "ConnectorDocument.pdf");
     }
 
     [HttpPost("share-email")]
-    public async Task<IActionResult> ShareEmail(Guid projectId, CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<ShareComposeResponse>>> ShareEmail(
+        Guid projectId,
+        CancellationToken cancellationToken)
     {
-        var (success, error, emlBytes, fileName) = await _pdfService.BuildOutlookDraftAsync(
-            projectId,
-            cancellationToken);
+        var (success, error, compose) = await _pdfService.BuildShareComposeAsync(projectId, cancellationToken);
+        if (!success || compose is null)
+        {
+            var failure = ApiResponse<ShareComposeResponse>.Fail(error ?? "Unable to prepare the Outlook message.");
+            return error == "Project not found." ? NotFound(failure) : BadRequest(failure);
+        }
 
-        if (!success || emlBytes is null)
-            return BadRequest(ApiResponse<object>.Fail(error ?? "Unable to create email draft."));
-
-        return File(emlBytes, "message/rfc822", fileName ?? "share.eml");
+        return Ok(ApiResponse<ShareComposeResponse>.Ok(compose));
     }
 }

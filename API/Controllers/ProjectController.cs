@@ -60,6 +60,20 @@ public class ProjectController : ControllerBase
         return result.Success ? Ok(result) : NotFound(result);
     }
 
+    [HttpPut("{id:guid}/jira-ticket")]
+    public async Task<ActionResult<ApiResponse<ProjectDto>>> SetJiraTicket(
+        Guid id,
+        [FromBody] SetJiraTicketRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _projectService.SetJiraTicketAsync(id, request?.Ticket, cancellationToken);
+        if (result.Success)
+            return Ok(result);
+        if (result.Message == "Project not found.")
+            return NotFound(result);
+        return BadRequest(result);
+    }
+
     [HttpPost("{id:guid}/generate-link")]
     public async Task<ActionResult<ApiResponse<GenerateLinkResponse>>> GenerateLink(
         Guid id,

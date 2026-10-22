@@ -15,6 +15,25 @@ import { ApiResponse } from '../models/api-response.model';
 
 const TOKEN_KEY = 'crgp_auth_token';
 const USER_KEY = 'crgp_user';
+const ROLE_CLAIM = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
+
+function rolesFromToken(token: string | null): string[] {
+  if (!token) return [];
+  const payload = token.split('.')[1];
+  if (!payload) return [];
+
+  try {
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const json = JSON.parse(atob(padded)) as Record<string, unknown>;
+    const raw = json['role'] ?? json[ROLE_CLAIM];
+    if (Array.isArray(raw)) return raw.filter((role): role is string => typeof role === 'string');
+    if (typeof raw === 'string' && raw.length > 0) return [raw];
+    return [];
+  } catch {
+    return [];
+  }
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -25,6 +44,7 @@ export class AuthService {
   private readonly currentUser = signal<User | null>(this.getStoredUser());
 
   readonly isAuthenticated = computed(() => !!this.token());
+  readonly isAdmin = computed(() => rolesFromToken(this.token()).includes('Admin'));
   readonly user = this.currentUser.asReadonly();
 
   login(credentials: LoginRequest): Observable<ApiResponse<AuthResponse>> {

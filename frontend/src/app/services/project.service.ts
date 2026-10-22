@@ -38,4 +38,8 @@ export class ProjectService {
   generateLink(id: string): Observable<ApiResponse<GenerateLinkResponse>> {
     return this.http.post<ApiResponse<GenerateLinkResponse>>(`${this.baseUrl}/${id}/generate-link`, {});
   }
+
+  setJiraTicket(id: string, ticket: string | null): Observable<ApiResponse<Project>> {
+    return this.http.put<ApiResponse<Project>>(`${this.baseUrl}/${id}/jira-ticket`, { ticket: ticket ?? '' });
+  }
 }

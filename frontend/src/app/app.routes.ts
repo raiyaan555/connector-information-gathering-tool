@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { adminGuard } from './guards/admin.guard';
 import { authGuard } from './guards/auth.guard';
 import { guestGuard } from './guards/guest.guard';
 
@@ -29,6 +30,11 @@ export const routes: Routes = [
       { path: 'clients/new', loadComponent: () => import('./clients/client-new.component').then((m) => m.ClientNewComponent) },
       { path: 'clients/:id', loadComponent: () => import('./clients/client-details.component').then((m) => m.ClientDetailsComponent) },
       { path: 'settings', loadComponent: () => import('./settings/settings.component').then((m) => m.SettingsComponent) },
+      {
+        path: 'users',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./users/users.component').then((m) => m.UsersComponent),
+      },
     ],
   },
   { path: 'form/:token', loadComponent: () => import('./customer-form/customer-form.component').then((m) => m.CustomerFormComponent) },

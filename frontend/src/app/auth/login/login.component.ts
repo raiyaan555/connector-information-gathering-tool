@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../services/auth.service';
 import { NotificationService } from '../../services/notification.service';
+import { ARCON_EMAIL_PATTERN } from '../../validators/arcon-email.validator';
 
 @Component({
   selector: 'app-login',
@@ -38,7 +39,7 @@ export class LoginComponent {
   readonly hidePassword = signal(true);
 
   readonly form = this.fb.nonNullable.group({
-    email: ['', [Validators.required, Validators.email, Validators.pattern(/@arconnet\.com$/)]],
+    email: ['', [Validators.required, Validators.email, Validators.pattern(ARCON_EMAIL_PATTERN)]],
     password: ['', [Validators.required, Validators.minLength(8)]],
     rememberMe: [false],
   });

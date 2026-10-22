@@ -57,7 +57,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(c => c.Email).HasMaxLength(256);
             entity.Property(c => c.Phone).HasMaxLength(50);
             entity.Property(c => c.Country).HasMaxLength(100);
+            entity.Property(c => c.OwnerUserId).HasMaxLength(450).IsRequired();
             entity.HasIndex(c => c.CompanyName);
+            entity.HasIndex(c => c.OwnerUserId);
             entity.HasMany(c => c.Projects)
                 .WithOne(p => p.Client)
                 .HasForeignKey(p => p.ClientId)
@@ -73,8 +75,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(p => p.Priority).HasMaxLength(50);
             entity.Property(p => p.FormToken).HasMaxLength(128);
             entity.Property(p => p.FormLink).HasMaxLength(500);
+            entity.Property(p => p.JiraTicket).HasMaxLength(500);
             entity.Property(p => p.CreatedBy).HasMaxLength(256).IsRequired();
+            entity.Property(p => p.OwnerUserId).HasMaxLength(450).IsRequired();
             entity.Property(p => p.Status).HasConversion<string>().HasMaxLength(32);
+            entity.HasIndex(p => p.OwnerUserId);
             entity.HasIndex(p => p.FormToken).IsUnique().HasFilter("[FormToken] IS NOT NULL");
             entity.HasIndex(p => p.ClientName);
             entity.HasOne(p => p.ProjectDocument)

@@ -14,9 +14,9 @@ Instead of manually filling Microsoft Word documents, engineers complete a struc
 - Connector Information Collection
 - Draft Saving
 - Professional PDF Generation
-- File Upload Management (PDF / PNG / JPG)
+- File Upload Management (PDF, DOCX, JPG, PNG, JSON)
 - Review Screen & Version History
-- Share via Email (Outlook `.eml` draft)
+- Share to the CI Connectors Team (Outlook on the web)
 - SQL Server Persistence (EF Core)
 - JWT Authentication (ASP.NET Identity)
 
@@ -51,6 +51,7 @@ connector-information-gathering-tool/
 │       ├── dashboard/
 │       ├── clients/
 │       ├── projects/
+│       ├── users/
 │       ├── shared/
 │       ├── layouts/
 │       ├── services/
@@ -86,6 +87,8 @@ connector-information-gathering-tool/
 - ✅ Login & Authentication (JWT + Refresh Tokens)
 - ✅ Register / Forgot Password / Profile APIs
 - ✅ Role seeding (Admin, Engineer, Viewer)
+- ✅ Admin Users page (list accounts, create Engineer / Viewer / Admin)
+- ✅ Public registration always creates an Engineer
 - ✅ Dashboard
 - ✅ Client Management
 - ✅ Create New Project / Application
@@ -95,9 +98,10 @@ connector-information-gathering-tool/
 - ✅ Review Screen (expandable sections)
 - ✅ Version History (Version 1 + Change Requests)
 - ✅ Professional PDF Generation
-- ✅ Uploaded PDFs merged into generated PDF
-- ✅ Uploaded images placed on separate pages
-- ✅ Share via Email (Outlook `.eml` with PDF attached)
+- ✅ Uploaded PDFs, DOCX files, and images merged into the generated PDF
+- ✅ JSON files packaged with that PDF in a `CIGT_Client_Application.zip` download
+- ✅ Share to Connector Team (Outlook on the web, addressed to the CI Connectors Team group, with an editable message). The PDF, or the CIGT zip when JSON files exist, downloads so the engineer can drop it onto that message
+- ✅ Jira ticket saved on the application, included in the share message and on the PDF
 - ✅ File Upload (stored on disk + metadata in DB)
 - ✅ SQL Server + Entity Framework Core
 - ✅ Responsive UI
@@ -108,10 +112,10 @@ connector-information-gathering-tool/
 - Cloud Blob Storage (Azure Blob / AWS S3)
 - Audit Logs
 - SMTP Email Sending
-- Expanded Role-Based Access Control
-- Admin Dashboard
+- Expanded Role-Based Access Control (Users page is Admin-only; other screens are still open to any signed-in user)
+- Broader admin dashboard (beyond the Users page)
 
-> **Note:** Word (`.docx`) and PowerPoint generation have been intentionally removed. PDF is the only supported export format.
+> **Note:** The tool does not generate Word or PowerPoint files. PDF is the document it creates. An uploaded `.docx` is merged into that PDF. When a JSON file is attached, the download is a zip named `CIGT_Client_Application` that contains the PDF and the JSON files.
 
 ---
 
@@ -188,7 +192,7 @@ http://localhost:4200
 ---
 
 
-> All users must register using an **@arconnet.com** email address.
+> All users must register using an **@arconnet.com** email address. Self-registration always creates an **Engineer**. An Admin creates Viewer or Admin accounts from the **Users** page (`/users`).
 
 Password policy (enforced in the UI and the API):
 
@@ -258,6 +262,8 @@ Review Screen
 | Frontend UI | ✅ Completed |
 | Authentication UI | ✅ Completed |
 | JWT Authentication API | ✅ Completed |
+| Admin Users page | ✅ Completed |
+| Role checks on every screen | 🚧 Pending (Users is Admin-only; other APIs only require login) |
 | Dashboard | ✅ Completed |
 | Information Gathering Form | ✅ Completed |
 | Save Draft | ✅ Completed |
@@ -267,7 +273,8 @@ Review Screen
 | SQL Server + EF Core | ✅ Completed |
 | File Storage (`Uploads/`) | ✅ Completed |
 | PDF Generation | ✅ Completed |
-| Share via Email (.eml) | ✅ Completed |
+| Share to Connector Team (Outlook on the web) | ✅ Completed |
+| Jira ticket on the application | ✅ Completed |
 | Word Generation | ❌ Removed |
 | Audit Logs | 🚧 Pending |
 | Cloud Storage | 🚧 Pending |
@@ -524,7 +531,7 @@ Before creating a Pull Request:
 - 🚧 SMTP Email Notifications
 - 🚧 Cloud Blob Storage
 - 🚧 Expanded Role-Based Access Control
-- 🚧 Admin Dashboard
+- 🚧 Broader admin dashboard (Users page is done)
 
 ---
 

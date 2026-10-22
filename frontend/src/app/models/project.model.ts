@@ -13,6 +13,7 @@ export interface Project {
   status: ProjectStatus;
   formToken?: string;
   formLink?: string;
+  jiraTicket?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string;

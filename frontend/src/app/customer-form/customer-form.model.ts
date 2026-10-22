@@ -61,11 +61,21 @@ export function createCustomerForm(fb: FormBuilder): FormGroup {
 export const LIFECYCLE_OPTIONS = ['Joiner', 'Mover', 'Leaver', 'SSO', 'Recon'];
 export const APPLICATION_TYPES = ['LDAP', 'DB Based', 'API Based', 'SDK Based', 'RPA Based'];
 export const SOT_ATTRIBUTES = ['Email Address', 'FullName', 'MobileNumber', 'Employee ID', 'Department'];
-export const ALLOWED_FILE_TYPES = [
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.json', '.xml', '.yaml', '.yml',
-  '.zip', '.rar', '.7z', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.mp4', '.mov', '.avi',
-  '.sql', '.bat', '.sh', '.ps1', '.postman_collection.json',
-];
+export const ALLOWED_FILE_TYPES = ['.pdf', '.docx', '.jpg', '.jpeg', '.png', '.json'];
+
+export const ALLOWED_FILE_ACCEPT = ALLOWED_FILE_TYPES.join(',');
+
+export const ALLOWED_FILE_LABEL = 'PDF, DOCX, JPG, PNG, and JSON';
+
+export function isAllowedAttachment(file: { name: string }): boolean {
+  const name = file.name.trim().toLowerCase();
+  return ALLOWED_FILE_TYPES.some((ext) => name.endsWith(ext));
+}
+
+export function isJpgOrPng(file: { name: string }): boolean {
+  const name = file.name.trim().toLowerCase();
+  return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
+}
 
 export const WORKSPACE_REQUIRED_KEYS = [
   'applicationPurpose', 'isSourceOfTruth', 'hasUatEnvironment', 'applicationType',

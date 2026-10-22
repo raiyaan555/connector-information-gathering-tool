@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using API.DTOs;
+using API.Helpers;
 using API.Models;
 using API.Repositories;
 using Microsoft.AspNetCore.Http;
@@ -20,24 +21,27 @@ public class AttachmentService : IAttachmentService
     private readonly IAttachmentRepository _attachmentRepository;
     private readonly IFileStorageService _fileStorage;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ICurrentUser _currentUser;
 
     public AttachmentService(
         IProjectRepository projectRepository,
         IAttachmentRepository attachmentRepository,
         IFileStorageService fileStorage,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        ICurrentUser currentUser)
     {
         _projectRepository = projectRepository;
         _attachmentRepository = attachmentRepository;
         _fileStorage = fileStorage;
         _httpContextAccessor = httpContextAccessor;
+        _currentUser = currentUser;
     }
 
     public async Task<ApiResponse<IEnumerable<AttachmentDto>>> GetByProjectIdAsync(
         Guid projectId,
         CancellationToken cancellationToken = default)
     {
-        var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+        var project = await OwnedProjectAsync(projectId, cancellationToken);
         if (project is null)
             return ApiResponse<IEnumerable<AttachmentDto>>.Fail("Project not found.");
 
@@ -50,12 +54,15 @@ public class AttachmentService : IAttachmentService
         UploadAttachmentRequest request,
         CancellationToken cancellationToken = default)
     {
-        var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+        var project = await OwnedProjectAsync(projectId, cancellationToken);
         if (project is null)
             return ApiResponse<AttachmentDto>.Fail("Project not found.");
 
         if (string.IsNullOrWhiteSpace(request.FileName))
             return ApiResponse<AttachmentDto>.Fail("File name is required.");
+
+        if (!AttachmentFileRules.IsAllowedExtension(request.FileName))
+            return ApiResponse<AttachmentDto>.Fail(AttachmentFileRules.RejectionMessage);
 
         var uploadedBy = GetUploader();
         var attachment = new Attachment
@@ -78,38 +85,69 @@ public class AttachmentService : IAttachmentService
         IFormFile file,
         CancellationToken cancellationToken = default)
     {
-        var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+        var project = await OwnedProjectAsync(projectId, cancellationToken);
         if (project is null)
             return ApiResponse<AttachmentDto>.Fail("Project not found.");
 
         if (file is null || file.Length == 0)
             return ApiResponse<AttachmentDto>.Fail("File is required.");
 
-        var id = Guid.NewGuid();
-        await using var stream = file.OpenReadStream();
-        var storagePath = await _fileStorage.SaveAttachmentAsync(
-            projectId, id, file.FileName, stream, cancellationToken);
+        var fileName = Path.GetFileName(file.FileName);
+        if (string.IsNullOrWhiteSpace(fileName))
+            return ApiResponse<AttachmentDto>.Fail("File name is required.");
 
-        var attachment = new Attachment
+        await using var source = file.OpenReadStream();
+        var ownsBuffer = false;
+        Stream content = source;
+        if (!source.CanSeek)
         {
-            Id = id,
-            ProjectId = projectId,
-            FileName = file.FileName,
-            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-            FileSize = file.Length,
-            StoragePath = storagePath,
-            UploadedAt = DateTime.UtcNow,
-            UploadedBy = GetUploader()
-        };
+            var buffer = new MemoryStream();
+            await source.CopyToAsync(buffer, cancellationToken);
+            buffer.Position = 0;
+            content = buffer;
+            ownsBuffer = true;
+        }
 
-        await _attachmentRepository.AddAsync(attachment, cancellationToken);
-        return ApiResponse<AttachmentDto>.Ok(MapToDto(attachment), "File uploaded successfully.");
+        try
+        {
+            if (!AttachmentFileRules.TryValidate(fileName, file.ContentType, content, out var contentType, out var error))
+                return ApiResponse<AttachmentDto>.Fail(error);
+
+            content.Position = 0;
+            var id = Guid.NewGuid();
+            var storagePath = await _fileStorage.SaveAttachmentAsync(
+                projectId, id, fileName, content, cancellationToken);
+
+            var attachment = new Attachment
+            {
+                Id = id,
+                ProjectId = projectId,
+                FileName = fileName,
+                ContentType = contentType,
+                FileSize = file.Length,
+                StoragePath = storagePath,
+                UploadedAt = DateTime.UtcNow,
+                UploadedBy = GetUploader()
+            };
+
+            await _attachmentRepository.AddAsync(attachment, cancellationToken);
+            return ApiResponse<AttachmentDto>.Ok(MapToDto(attachment), "File uploaded successfully.");
+        }
+        finally
+        {
+            if (ownsBuffer)
+                await content.DisposeAsync();
+        }
     }
 
     public async Task<ApiResponse<MessageResponse>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var existing = await _attachmentRepository.GetByIdAsync(id, cancellationToken);
         if (existing is null)
+            return ApiResponse<MessageResponse>.Fail("Attachment not found.");
+
+        var project = await OwnedProjectAsync(existing.ProjectId, cancellationToken);
+        if (project is null)
             return ApiResponse<MessageResponse>.Fail("Attachment not found.");
 
         _fileStorage.DeleteIfExists(existing.StoragePath);
@@ -120,6 +158,15 @@ public class AttachmentService : IAttachmentService
         return ApiResponse<MessageResponse>.Ok(
             new MessageResponse { Message = "Attachment deleted successfully." },
             "Attachment deleted successfully.");
+    }
+
+    private async Task<Project?> OwnedProjectAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        var ownerId = _currentUser.UserId;
+        if (string.IsNullOrWhiteSpace(ownerId))
+            return null;
+
+        return await _projectRepository.GetByIdAsync(projectId, ownerId, cancellationToken);
     }
 
     private string GetUploader() =>

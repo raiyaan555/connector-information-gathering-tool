@@ -22,11 +22,6 @@ public interface IAuthService
 
 public class AuthService : IAuthService
 {
-    private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Admin", "Engineer", "Viewer"
-    };
-
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IJwtTokenService _jwtTokenService;
@@ -61,6 +56,9 @@ public class AuthService : IAuthService
             return ApiResponse<AuthResponse>.Fail("Invalid email or password.");
         }
 
+        if (!EmailValidator.IsValidArconEmail(user.Email))
+            return ApiResponse<AuthResponse>.Fail("This account cannot sign in. Email must be an @arconnet.com address.");
+
         return ApiResponse<AuthResponse>.Ok(await BuildAuthResponseAsync(user, cancellationToken), "Login successful.");
     }
 
@@ -86,9 +84,8 @@ public class AuthService : IAuthService
         if (await _userManager.FindByNameAsync(username) is not null)
             return ApiResponse<AuthResponse>.Fail("Username is already taken.");
 
-        var role = string.IsNullOrWhiteSpace(request.Role) ? "Engineer" : request.Role.Trim();
-        if (!AllowedRoles.Contains(role))
-            return ApiResponse<AuthResponse>.Fail("Invalid role. Allowed roles: Admin, Engineer, Viewer.");
+        // Public registration is always Engineer. Admins create other roles from the Users page.
+        const string role = "Engineer";
 
         var user = new ApplicationUser
         {
@@ -191,6 +188,9 @@ public class AuthService : IAuthService
             return ApiResponse<AuthResponse>.Fail("Invalid or expired refresh token.");
 
         var user = stored.User;
+        if (!EmailValidator.IsValidArconEmail(user.Email))
+            return ApiResponse<AuthResponse>.Fail("This account cannot sign in. Email must be an @arconnet.com address.");
+
         var newRefresh = await _jwtTokenService.CreateRefreshTokenAsync(user, cancellationToken);
         await _jwtTokenService.RevokeRefreshTokenAsync(stored, newRefresh.Token, cancellationToken);
 

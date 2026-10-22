@@ -1,6 +1,7 @@
-using System.Text;
+using System.IO.Compression;
 using API.Configuration;
 using API.DTOs;
+using API.Helpers;
 using API.Models;
 using API.Repositories;
 using Microsoft.Extensions.Options;
@@ -9,12 +10,12 @@ namespace API.Services;
 
 public interface IConnectorPdfService
 {
-    Task<(bool Success, string? Error, byte[]? PdfBytes, string? FileName)> GenerateAsync(
+    Task<(bool Success, string? Error, byte[]? FileBytes, string? FileName, string? ContentType)> GenerateAsync(
         Guid projectId,
         Dictionary<string, string> formData,
         CancellationToken cancellationToken = default);
 
-    Task<(bool Success, string? Error, byte[]? EmlBytes, string? FileName)> BuildOutlookDraftAsync(
+    Task<(bool Success, string? Error, ShareComposeResponse? Compose)> BuildShareComposeAsync(
         Guid projectId,
         CancellationToken cancellationToken = default);
 }
@@ -26,6 +27,7 @@ public class ConnectorPdfService : IConnectorPdfService
     private readonly IFileStorageService _fileStorage;
     private readonly IPdfGenerationService _pdfGeneration;
     private readonly EmailSettings _emailSettings;
+    private readonly ICurrentUser _currentUser;
     private readonly ILogger<ConnectorPdfService> _logger;
 
     public ConnectorPdfService(
@@ -34,6 +36,7 @@ public class ConnectorPdfService : IConnectorPdfService
         IFileStorageService fileStorage,
         IPdfGenerationService pdfGeneration,
         IOptions<EmailSettings> emailSettings,
+        ICurrentUser currentUser,
         ILogger<ConnectorPdfService> logger)
     {
         _projectRepository = projectRepository;
@@ -41,79 +44,119 @@ public class ConnectorPdfService : IConnectorPdfService
         _fileStorage = fileStorage;
         _pdfGeneration = pdfGeneration;
         _emailSettings = emailSettings.Value;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
-    public async Task<(bool Success, string? Error, byte[]? PdfBytes, string? FileName)> GenerateAsync(
+    public async Task<(bool Success, string? Error, byte[]? FileBytes, string? FileName, string? ContentType)> GenerateAsync(
         Guid projectId,
         Dictionary<string, string> formData,
         CancellationToken cancellationToken = default)
     {
-        var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+        var project = await OwnedProjectAsync(projectId, cancellationToken);
         if (project is null)
-            return (false, "Project not found.", null, null);
+            return (false, "Project not found.", null, null, null);
 
         if (formData is null || formData.Count == 0)
-            return (false, "Form data is required to generate the PDF.", null, null);
+            return (false, "Form data is required to generate the PDF.", null, null, null);
 
         var normalized = NormalizeFormData(formData);
-        var attachments = await _attachmentRepository.GetByProjectIdAsync(projectId, cancellationToken);
-        var supporting = new List<AttachmentFileContent>();
-
-        foreach (var attachment in attachments)
-        {
-            var path = _fileStorage.GetAbsolutePath(attachment.StoragePath);
-            if (path is null) continue;
-            supporting.Add(new AttachmentFileContent(attachment.FileName, attachment.ContentType, path));
-        }
+        var supporting = await LoadSupportingFilesAsync(projectId, cancellationToken);
 
         try
         {
             var pdfBytes = _pdfGeneration.GenerateConnectorPdf(project, normalized, supporting);
-            var fileName = BuildPdfFileName(project);
-            await _fileStorage.SaveGeneratedPdfAsync(projectId, pdfBytes, fileName, cancellationToken);
+            var pdfFileName = BuildPdfFileName(project);
+            await _fileStorage.SaveGeneratedPdfAsync(projectId, pdfBytes, pdfFileName, cancellationToken);
+
+            var jsonFiles = supporting.Where(AttachmentKinds.IsJson).ToList();
+            if (jsonFiles.Count > 0)
+            {
+                var zipName = BuildZipFileName(project);
+                var zipBytes = BuildZip(pdfFileName, pdfBytes, jsonFiles);
+                _logger.LogInformation(
+                    "Generated connector PDF and JSON zip for project {ProjectId} ({Bytes} bytes)",
+                    projectId,
+                    zipBytes.Length);
+                return (true, null, zipBytes, zipName, "application/zip");
+            }
+
             _logger.LogInformation("Generated connector PDF for project {ProjectId} ({Bytes} bytes)", projectId, pdfBytes.Length);
-            return (true, null, pdfBytes, fileName);
+            return (true, null, pdfBytes, pdfFileName, "application/pdf");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "PDF generation failed for project {ProjectId}", projectId);
-            return (false, "PDF generation failed. Please try again.", null, null);
+            return (false, "PDF generation failed. Please try again.", null, null, null);
         }
     }
 
-    public async Task<(bool Success, string? Error, byte[]? EmlBytes, string? FileName)> BuildOutlookDraftAsync(
+    public async Task<(bool Success, string? Error, ShareComposeResponse? Compose)> BuildShareComposeAsync(
         Guid projectId,
         CancellationToken cancellationToken = default)
     {
-        var project = await _projectRepository.GetByIdAsync(projectId, cancellationToken);
+        var project = await OwnedProjectAsync(projectId, cancellationToken);
         if (project is null)
-            return (false, "Project not found.", null, null);
+            return (false, "Project not found.", null);
 
-        var pdfPath = _fileStorage.GetLatestGeneratedPdfPath(projectId);
-        if (pdfPath is null)
-            return (false, "Generate the PDF before sharing via email.", null, null);
+        var to = _emailSettings.ConnectorTeamAddress?.Trim();
+        if (string.IsNullOrWhiteSpace(to))
+            return (false, "The connector team address is not configured.", null);
 
-        var pdfBytes = await File.ReadAllBytesAsync(pdfPath, cancellationToken);
-        var pdfFileName = _fileStorage.GetLatestGeneratedFileName(projectId)
-            ?? BuildPdfFileName(project);
-
-        var to = _emailSettings.ConnectorTeamAddress;
+        var jsonFiles = (await LoadSupportingFilesAsync(projectId, cancellationToken))
+            .Where(AttachmentKinds.IsJson)
+            .ToList();
+        var hasJson = jsonFiles.Count > 0;
+        var attachmentName = hasJson ? BuildZipFileName(project) : BuildPdfFileName(project);
+        var teamName = string.IsNullOrWhiteSpace(_emailSettings.ConnectorTeamName)
+            ? "CI Connectors Team"
+            : _emailSettings.ConnectorTeamName.Trim();
+        var engineer = string.IsNullOrWhiteSpace(project.ImplementationEngineer)
+            ? project.CreatedBy
+            : project.ImplementationEngineer;
+        var jiraKey = JiraTicketRules.IssueKeyOrNull(project.JiraTicket);
         var subject = $"Connector Requirement Gathering — {project.ClientName} / {project.ApplicationName}";
-        var body =
-            $"Dear Connector Team,{Environment.NewLine}{Environment.NewLine}" +
-            $"Please find attached the Connector Information Gathering document for the following engagement:{Environment.NewLine}{Environment.NewLine}" +
-            $"Client: {project.ClientName}{Environment.NewLine}" +
-            $"Application: {project.ApplicationName}{Environment.NewLine}" +
-            $"Project: {project.Name}{Environment.NewLine}{Environment.NewLine}" +
-            $"Kindly review and proceed with connector development as applicable.{Environment.NewLine}{Environment.NewLine}" +
-            $"Regards,{Environment.NewLine}" +
-            $"{(string.IsNullOrWhiteSpace(project.ImplementationEngineer) ? project.CreatedBy : project.ImplementationEngineer)}{Environment.NewLine}" +
-            $"ARCON — Implementation";
+        if (!string.IsNullOrWhiteSpace(jiraKey))
+            subject += $" — {jiraKey}";
+        subject = subject.Replace("\r", " ").Replace("\n", " ");
 
-        var eml = BuildEml(to, subject, body, pdfFileName, pdfBytes);
-        var emlName = $"Share_{Sanitize(project.ApplicationName)}.eml";
-        return (true, null, eml, emlName);
+        var jiraLine = string.IsNullOrWhiteSpace(project.JiraTicket)
+            ? string.Empty
+            : $"Jira ticket: {project.JiraTicket.Trim()}\n";
+        var attachmentNote = hasJson
+            ? $"The attached file is a zip named {attachmentName}. It contains the PDF and the JSON files for this project.\n\n"
+            : $"The attached file is {attachmentName}.\n\n";
+        var body =
+            $"Dear {teamName},\n\n" +
+            "Please find attached the Connector Information Gathering document for the following engagement:\n\n" +
+            $"Client: {project.ClientName}\n" +
+            $"Application: {project.ApplicationName}\n" +
+            $"Project: {project.Name}\n" +
+            jiraLine +
+            "\n" +
+            attachmentNote +
+            "Kindly review and proceed with connector development as applicable.\n\n" +
+            "Regards,\n" +
+            $"{engineer}\n" +
+            "ARCON — Implementation";
+
+        return (true, null, new ShareComposeResponse
+        {
+            To = to,
+            ToName = teamName,
+            Subject = subject,
+            Body = body,
+            AttachmentFileName = attachmentName
+        });
+    }
+
+    private async Task<Project?> OwnedProjectAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        var ownerId = _currentUser.UserId;
+        if (string.IsNullOrWhiteSpace(ownerId))
+            return null;
+
+        return await _projectRepository.GetByIdAsync(projectId, ownerId, cancellationToken);
     }
 
     private static Dictionary<string, string> NormalizeFormData(Dictionary<string, string> formData)
@@ -127,51 +170,85 @@ public class ConnectorPdfService : IConnectorPdfService
         return result;
     }
 
-    private static string BuildPdfFileName(Project project)
+    private async Task<List<AttachmentFileContent>> LoadSupportingFilesAsync(
+        Guid projectId,
+        CancellationToken cancellationToken)
     {
-        return $"CIGT_{Sanitize(project.ClientName)}_{Sanitize(project.ApplicationName)}.pdf";
+        var attachments = await _attachmentRepository.GetByProjectIdAsync(projectId, cancellationToken);
+        var supporting = new List<AttachmentFileContent>();
+        foreach (var attachment in attachments)
+        {
+            var path = _fileStorage.GetAbsolutePath(attachment.StoragePath);
+            if (path is null) continue;
+            supporting.Add(new AttachmentFileContent(attachment.FileName, attachment.ContentType, path));
+        }
+
+        return supporting;
+    }
+
+    private static string BuildDownloadBaseName(Project project) =>
+        $"CIGT_{Sanitize(project.ClientName)}_{Sanitize(project.ApplicationName)}";
+
+    private static string BuildPdfFileName(Project project) => $"{BuildDownloadBaseName(project)}.pdf";
+
+    private static string BuildZipFileName(Project project) => $"{BuildDownloadBaseName(project)}.zip";
+
+    private static byte[] BuildZip(string pdfFileName, byte[] pdfBytes, IReadOnlyList<AttachmentFileContent> jsonFiles)
+    {
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            WriteZipEntry(archive, UniqueZipName(pdfFileName, used), pdfBytes);
+
+            foreach (var json in jsonFiles)
+            {
+                if (!File.Exists(json.AbsolutePath))
+                    continue;
+                var entryName = UniqueZipName(Path.GetFileName(json.FileName), used);
+                WriteZipEntry(archive, entryName, File.ReadAllBytes(json.AbsolutePath));
+            }
+        }
+
+        return ms.ToArray();
+    }
+
+    private static void WriteZipEntry(ZipArchive archive, string name, byte[] bytes)
+    {
+        var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
+        using var entryStream = entry.Open();
+        entryStream.Write(bytes, 0, bytes.Length);
+    }
+
+    private static string UniqueZipName(string fileName, HashSet<string> used)
+    {
+        var name = Path.GetFileName(fileName);
+        if (string.IsNullOrWhiteSpace(name))
+            name = "file";
+        name = string.Join("_", name.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+        if (string.IsNullOrWhiteSpace(name))
+            name = "file";
+
+        if (used.Add(name))
+            return name;
+
+        var stem = Path.GetFileNameWithoutExtension(name);
+        var extension = Path.GetExtension(name);
+        var index = 2;
+        string candidate;
+        do
+        {
+            candidate = $"{stem}_{index}{extension}";
+            index++;
+        }
+        while (!used.Add(candidate));
+
+        return candidate;
     }
 
     private static string Sanitize(string value)
     {
         var cleaned = string.Join("_", value.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim();
         return string.IsNullOrWhiteSpace(cleaned) ? "Document" : cleaned.Replace(' ', '_');
-    }
-
-    private static byte[] BuildEml(string to, string subject, string body, string attachmentName, byte[] attachmentBytes)
-    {
-        var boundary = "----=_CIGT_" + Guid.NewGuid().ToString("N");
-        var sb = new StringBuilder();
-        sb.Append("To: ").Append(to).Append("\r\n");
-        sb.Append("Subject: ").Append(EncodeHeader(subject)).Append("\r\n");
-        sb.Append("X-Unsent: 1\r\n");
-        sb.Append("MIME-Version: 1.0\r\n");
-        sb.Append("Content-Type: multipart/mixed; boundary=\"").Append(boundary).Append("\"\r\n");
-        sb.Append("\r\n");
-        sb.Append("--").Append(boundary).Append("\r\n");
-        sb.Append("Content-Type: text/plain; charset=\"utf-8\"\r\n");
-        sb.Append("Content-Transfer-Encoding: 7bit\r\n\r\n");
-        sb.Append(body).Append("\r\n\r\n");
-        sb.Append("--").Append(boundary).Append("\r\n");
-        sb.Append("Content-Type: application/pdf; name=\"").Append(attachmentName).Append("\"\r\n");
-        sb.Append("Content-Transfer-Encoding: base64\r\n");
-        sb.Append("Content-Disposition: attachment; filename=\"").Append(attachmentName).Append("\"\r\n\r\n");
-        sb.Append(ChunkBase64(Convert.ToBase64String(attachmentBytes)));
-        sb.Append("\r\n--").Append(boundary).Append("--\r\n");
-        return Encoding.UTF8.GetBytes(sb.ToString());
-    }
-
-    private static string EncodeHeader(string value) =>
-        value.Replace("\r", " ").Replace("\n", " ");
-
-    private static string ChunkBase64(string base64)
-    {
-        var sb = new StringBuilder();
-        for (var i = 0; i < base64.Length; i += 76)
-        {
-            var len = Math.Min(76, base64.Length - i);
-            sb.Append(base64, i, len).Append("\r\n");
-        }
-        return sb.ToString();
     }
 }

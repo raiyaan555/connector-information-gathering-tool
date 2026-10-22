@@ -24,7 +24,9 @@ import {
   LIFECYCLE_OPTIONS,
   APPLICATION_TYPES,
   SOT_ATTRIBUTES,
-  ALLOWED_FILE_TYPES,
+  ALLOWED_FILE_ACCEPT,
+  ALLOWED_FILE_LABEL,
+  isAllowedAttachment,
 } from './customer-form.model';
 import { CustomerFormInfo } from '../models/customer-form.model';
 
@@ -77,7 +79,8 @@ export class CustomerFormComponent implements OnInit {
   readonly lifecycleOptions = LIFECYCLE_OPTIONS;
   readonly applicationTypes = APPLICATION_TYPES;
   readonly sotAttributes = SOT_ATTRIBUTES;
-  readonly allowedTypes = ALLOWED_FILE_TYPES.join(', ');
+  readonly allowedAccept = ALLOWED_FILE_ACCEPT;
+  readonly allowedLabel = ALLOWED_FILE_LABEL;
 
   private token = '';
 
@@ -127,6 +130,11 @@ export class CustomerFormComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
     const file = input.files[0];
+    if (!isAllowedAttachment(file)) {
+      this.notification.error('Only PDF, DOCX, JPG, PNG, and JSON files are allowed.');
+      input.value = '';
+      return;
+    }
     this.mockFiles.update((files) => [
       ...files,
       { name: file.name, type: file.type || 'application/octet-stream', size: file.size, uploadedAt: new Date() },

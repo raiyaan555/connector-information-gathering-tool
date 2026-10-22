@@ -21,7 +21,7 @@ import { ProjectService } from '../../services/project.service';
 import { NotificationService } from '../../services/notification.service';
 import { WorkspaceDraftService } from '../../services/workspace-draft.service';
 import { AttachmentService } from '../../services/attachment.service';
-import { PdfService } from '../../services/pdf.service';
+import { cigtDownloadName, PdfService } from '../../services/pdf.service';
 import { ProjectDocumentRepository } from '../../services/project-document.repository';
 import { AuthService } from '../../services/auth.service';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
@@ -31,7 +31,9 @@ import {
   LIFECYCLE_OPTIONS,
   APPLICATION_TYPES,
   SOT_ATTRIBUTES,
-  ALLOWED_FILE_TYPES,
+  ALLOWED_FILE_ACCEPT,
+  isAllowedAttachment,
+  isJpgOrPng,
   WORKSPACE_REQUIRED_KEYS,
   WORKSPACE_SECTIONS,
   FORM_FIELD_HINTS,
@@ -101,7 +103,7 @@ export class ProjectWorkspaceComponent implements OnInit {
   readonly lifecycleOptions = LIFECYCLE_OPTIONS;
   readonly applicationTypes = APPLICATION_TYPES;
   readonly sotAttributes = SOT_ATTRIBUTES;
-  readonly allowedTypes = ALLOWED_FILE_TYPES.join(',');
+  readonly allowedTypes = ALLOWED_FILE_ACCEPT;
   readonly sections = WORKSPACE_SECTIONS;
   readonly hints = FORM_FIELD_HINTS;
   readonly moduleDiagramImage = computed(() => {
@@ -278,12 +280,31 @@ export class ProjectWorkspaceComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length) return;
     const file = input.files[0];
+    if (!isJpgOrPng(file)) {
+      this.notification.error('Module diagram must be a JPG or PNG image.');
+      input.value = '';
+      return;
+    }
     void this.addAndUploadFiles([file], 'Module diagram uploaded');
     input.value = '';
   }
 
   private async addAndUploadFiles(selected: File[], successMessage?: string): Promise<void> {
-    const mapped = selected.map((file) => ({
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const file of selected) {
+      if (isAllowedAttachment(file)) accepted.push(file);
+      else rejected.push(file.name);
+    }
+
+    if (rejected.length) {
+      this.notification.error(
+        `Only PDF, DOCX, JPG, PNG, and JSON files are allowed. Not added: ${rejected.join(', ')}`,
+      );
+    }
+    if (!accepted.length) return;
+
+    const mapped = accepted.map((file) => ({
       name: file.name,
       type: file.type || 'application/octet-stream',
       size: file.size,
@@ -292,25 +313,46 @@ export class ProjectWorkspaceComponent implements OnInit {
       file,
     }));
     this.files.update((existing) => [...existing, ...mapped]);
-    this.saveDraft(false);
 
+    let uploaded = 0;
     for (const item of mapped) {
       if (!item.file) continue;
       try {
         const res = await firstValueFrom(this.attachmentService.uploadFile(this.projectId, item.file));
         if (res.success && res.data) {
+          uploaded++;
           this.files.update((list) =>
             list.map((f) => (f === item || (f.name === item.name && f.size === item.size && !f.serverId)
               ? { ...f, serverId: res.data!.id }
               : f)),
           );
+        } else {
+          this.dropLocalFile(item);
+          this.notification.error(res.message || `Failed to upload ${item.name}.`);
         }
-      } catch {
-        this.notification.error(`Failed to upload ${item.name}. It may be missing from the PDF.`);
+      } catch (err) {
+        this.dropLocalFile(item);
+        this.notification.error(this.uploadError(err, `Failed to upload ${item.name}.`));
       }
     }
 
-    this.notification.success(successMessage ?? `${selected.length} file(s) added`);
+    this.saveDraft(false);
+    if (uploaded > 0) {
+      this.notification.success(successMessage ?? `${uploaded} file(s) added`);
+    }
+  }
+
+  private dropLocalFile(item: WorkspaceFile): void {
+    this.files.update((files) => {
+      const removed = files.find((f) => f === item);
+      if (removed?.objectUrl) URL.revokeObjectURL(removed.objectUrl);
+      return files.filter((f) => f !== item);
+    });
+  }
+
+  private uploadError(err: unknown, fallback: string): string {
+    const body = (err as { error?: { message?: string } })?.error;
+    return body?.message || fallback;
   }
 
   private isPngJpegFile(f: WorkspaceFile): boolean {
@@ -407,14 +449,6 @@ export class ProjectWorkspaceComponent implements OnInit {
         changedBy,
       });
 
-      this.docRepo.addGeneratedDocument({
-        projectId: this.projectId,
-        versionNumber: version.versionNumber,
-        docType: 'pdf',
-        fileName: `CIGT_v${version.versionNumber}.pdf`,
-        includedAttachmentNames: attachmentsMeta.map((a) => a.name),
-      });
-
       const project = this.project();
       if (project) {
         try {
@@ -432,21 +466,36 @@ export class ProjectWorkspaceComponent implements OnInit {
       }
 
       const formData = this.toStringMap(rawForm);
-      const blob = await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
-      const fileName = `CIGT_${project?.clientName || 'Client'}_${project?.applicationName || 'Application'}_v${version.versionNumber}.pdf`.replace(
-        /[^\w.\-]+/g,
-        '_',
+      const response = await firstValueFrom(this.pdfService.generatePdf(this.projectId, formData));
+      const blob = response.body;
+      if (!blob) throw new Error('Empty download');
+      const fileName = cigtDownloadName(
+        response,
+        project?.clientName || 'Client',
+        project?.applicationName || 'Application',
       );
       this.downloadBlob(blob, fileName);
+      const isZip = fileName.toLowerCase().endsWith('.zip');
+
+      this.docRepo.addGeneratedDocument({
+        projectId: this.projectId,
+        versionNumber: version.versionNumber,
+        docType: 'pdf',
+        fileName,
+        includedAttachmentNames: attachmentsMeta.map((a) => a.name),
+      });
 
       if (completionPercent >= 100) {
         this.draftService.clear(this.projectId);
       }
 
+      const downloaded = isZip
+        ? 'CIGT zip downloaded (PDF and JSON files).'
+        : 'PDF downloaded.';
       const label =
         version.saveType === 'Official'
-          ? 'Version 1 saved. Redirecting to review…'
-          : `${version.changeRequestId} (Version ${version.versionNumber}) saved. Redirecting to review…`;
+          ? `Version 1 saved. ${downloaded} Redirecting to review…`
+          : `${version.changeRequestId} (Version ${version.versionNumber}) saved. ${downloaded} Redirecting to review…`;
       this.notification.success(label);
       await this.router.navigate(['/project', this.projectId]);
     } catch {

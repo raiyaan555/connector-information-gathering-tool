@@ -19,6 +19,39 @@ public record AttachmentFileContent(
     string ContentType,
     string AbsolutePath);
 
+internal static class AttachmentKinds
+{
+    public static bool IsJson(AttachmentFileContent file) =>
+        HasExtension(file, ".json");
+
+    public static bool IsDocx(AttachmentFileContent file) =>
+        HasExtension(file, ".docx");
+
+    public static bool IsPdf(AttachmentFileContent file) =>
+        !IsJson(file) && !IsDocx(file) && (
+            HasExtension(file, ".pdf")
+            || file.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsImage(AttachmentFileContent file)
+    {
+        if (IsJson(file) || IsDocx(file) || IsPdf(file))
+            return false;
+
+        return HasExtension(file, ".png")
+            || HasExtension(file, ".jpg")
+            || HasExtension(file, ".jpeg")
+            || file.ContentType.Contains("png", StringComparison.OrdinalIgnoreCase)
+            || file.ContentType.Contains("jpeg", StringComparison.OrdinalIgnoreCase)
+            || file.ContentType.Contains("jpg", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsMergedIntoPdf(AttachmentFileContent file) =>
+        IsPdf(file) || IsImage(file) || IsDocx(file);
+
+    private static bool HasExtension(AttachmentFileContent file, string extension) =>
+        file.FileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
+}
+
 public class PdfGenerationService : IPdfGenerationService
 {
     // ARCON brand red (matches logo triangle)
@@ -119,6 +152,14 @@ public class PdfGenerationService : IPdfGenerationService
                             t.Span("Application: ").Bold().FontColor(BrandRedDark);
                             t.Span(project.ApplicationName);
                         });
+                        if (!string.IsNullOrWhiteSpace(project.JiraTicket))
+                        {
+                            meta.Item().Text(t =>
+                            {
+                                t.Span("Jira ticket: ").Bold().FontColor(BrandRedDark);
+                                t.Span(project.JiraTicket);
+                            });
+                        }
                         meta.Item().Text(t =>
                         {
                             t.Span("Prepared by: ").Bold().FontColor(BrandRedDark);
@@ -163,12 +204,12 @@ public class PdfGenerationService : IPdfGenerationService
                         });
                     }
 
-                    var pdfAttachments = supportingFiles
-                        .Where(f => IsPdf(f) || IsImage(f))
+                    var mergedAttachments = supportingFiles
+                        .Where(AttachmentKinds.IsMergedIntoPdf)
                         .Select(f => f.FileName)
                         .ToList();
 
-                    if (pdfAttachments.Count > 0)
+                    if (mergedAttachments.Count > 0)
                     {
                         col.Item().PaddingTop(8).Column(att =>
                         {
@@ -181,8 +222,34 @@ public class PdfGenerationService : IPdfGenerationService
                                 .FontSize(11);
                             att.Item().Border(1).BorderColor(Colors.Grey.Lighten2).Padding(10).Column(list =>
                             {
-                                foreach (var name in pdfAttachments)
+                                foreach (var name in mergedAttachments)
                                     list.Item().Text($"• {name}").FontSize(10);
+                            });
+                        });
+                    }
+
+                    var jsonAttachments = supportingFiles
+                        .Where(AttachmentKinds.IsJson)
+                        .Select(f => f.FileName)
+                        .ToList();
+
+                    if (jsonAttachments.Count > 0)
+                    {
+                        col.Item().PaddingTop(8).Column(att =>
+                        {
+                            att.Item()
+                                .Background(BrandRed)
+                                .Padding(8)
+                                .Text("JSON files (included in the CIGT zip)")
+                                .Bold()
+                                .FontColor(Colors.White)
+                                .FontSize(11);
+                            att.Item().Border(1).BorderColor(Colors.Grey.Lighten2).Padding(10).Column(list =>
+                            {
+                                foreach (var name in jsonAttachments)
+                                    list.Item().Text($"• {name}").FontSize(10);
+                                list.Item().PaddingTop(4).Text("These files are packaged with this PDF in the CIGT zip download.")
+                                    .FontSize(9).Italic().FontColor(Colors.Grey.Darken1);
                             });
                         });
                     }
@@ -211,7 +278,7 @@ public class PdfGenerationService : IPdfGenerationService
             if (!File.Exists(file.AbsolutePath))
                 continue;
 
-            if (IsPdf(file))
+            if (AttachmentKinds.IsPdf(file))
             {
                 try
                 {
@@ -224,7 +291,20 @@ public class PdfGenerationService : IPdfGenerationService
                     // Skip unreadable PDFs rather than failing the whole generation.
                 }
             }
-            else if (IsImage(file))
+            else if (AttachmentKinds.IsDocx(file))
+            {
+                try
+                {
+                    var docxPdf = DocxPdfConverter.ToPdf(file.AbsolutePath, file.FileName);
+                    if (docxPdf is { Length: > 0 })
+                        AppendPdfBytes(output, docxPdf);
+                }
+                catch
+                {
+                    // Skip a Word file that cannot be read. Keep the rest of the PDF.
+                }
+            }
+            else if (AttachmentKinds.IsImage(file))
             {
                 try
                 {
@@ -279,20 +359,6 @@ public class PdfGenerationService : IPdfGenerationService
         gfx.DrawImage(image, x, y, drawW, drawH);
     }
 
-    private static bool IsPdf(AttachmentFileContent file)
-    {
-        var n = file.FileName.ToLowerInvariant();
-        var t = file.ContentType.ToLowerInvariant();
-        return t.Contains("pdf") || n.EndsWith(".pdf");
-    }
-
-    private static bool IsImage(AttachmentFileContent file)
-    {
-        var n = file.FileName.ToLowerInvariant();
-        var t = file.ContentType.ToLowerInvariant();
-        return t.Contains("png") || t.Contains("jpeg") || t.Contains("jpg")
-               || n.EndsWith(".png") || n.EndsWith(".jpg") || n.EndsWith(".jpeg");
-    }
 }
 
 internal static class FormFieldCatalog
