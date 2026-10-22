@@ -14,7 +14,18 @@ public static class DbSeeder
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DbSeeder");
 
-        await context.Database.MigrateAsync(cancellationToken);
+        try
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+            logger.LogInformation("Database migrations applied successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex,
+                "Failed to connect to SQL Server or apply migrations. " +
+                "Ensure SQL Server is running (docker compose up -d) and ConnectionStrings:DefaultConnection is correct.");
+            throw;
+        }
 
         await EnsureRolesAsync(roleManager, cancellationToken);
         await EnsureAdminUserAsync(userManager, logger, cancellationToken);

@@ -13,11 +13,15 @@ public interface IFileStorageService
     void DeleteIfExists(string? relativePath);
 }
 
-public class FileStorageService : IFileStorageService
+/// <summary>
+/// Stores files on the local filesystem under the configured Uploads/ root.
+/// SQL Server stores only metadata (file name, path, content type, size, user, timestamp).
+/// </summary>
+public class LocalFileStorageService : IFileStorageService
 {
     private readonly string _root;
 
-    public FileStorageService(IOptions<StorageSettings> options, IWebHostEnvironment env)
+    public LocalFileStorageService(IOptions<StorageSettings> options, IWebHostEnvironment env)
     {
         var configured = options.Value.RootPath;
         _root = Path.IsPathRooted(configured)

@@ -1,4 +1,3 @@
-using System.Text;
 using API.Configuration;
 using API.Data;
 using API.Middleware;
@@ -9,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +19,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSettings.SectionName));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
 builder.Services.Configure<StorageSettings>(builder.Configuration.GetSection(StorageSettings.SectionName));
+
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
     ?? throw new InvalidOperationException("Jwt configuration section is missing.");
 
@@ -29,7 +30,17 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+        sqlOptions.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
+    }));
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>("database");
 
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -87,7 +98,8 @@ builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ICustomerFormRepository, CustomerFormRepository>();
 builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 
-builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
+RegisterFileStorage(builder);
+
 builder.Services.AddScoped<IPdfGenerationService, PdfGenerationService>();
 builder.Services.AddScoped<IConnectorPdfService, ConnectorPdfService>();
 
@@ -111,7 +123,28 @@ app.UseCors("AllowAngular");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 await DbSeeder.SeedAsync(app.Services);
 
 app.Run();
+
+static void RegisterFileStorage(WebApplicationBuilder builder)
+{
+    var storageSettings = builder.Configuration
+        .GetSection(StorageSettings.SectionName)
+        .Get<StorageSettings>() ?? new StorageSettings();
+
+    var provider = storageSettings.Provider?.Trim() ?? "Local";
+
+    switch (provider.ToLowerInvariant())
+    {
+        case "local":
+            builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
+            break;
+        default:
+            throw new InvalidOperationException(
+                $"Unsupported Storage:Provider '{provider}'. Supported values: Local. " +
+                "To use cloud storage in production, implement a new IFileStorageService and set Storage:Provider.");
+    }
+}

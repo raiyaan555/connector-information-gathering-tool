@@ -36,7 +36,7 @@ Instead of manually filling Microsoft Word documents, engineers complete a struc
 | ORM | Entity Framework Core |
 | Database | SQL Server |
 | PDF Generation | QuestPDF + PdfSharpCore |
-| File Storage | Local disk (`App_Data`) |
+| File Storage | Local disk (`Uploads/`, metadata in SQL Server) |
 | Language | TypeScript, C# |
 
 ---
@@ -68,8 +68,11 @@ connector-information-gathering-tool/
 │   ├── DTOs/
 │   ├── Models/
 │   ├── Assets/
+│   ├── Uploads/            # local files (gitignored)
 │   └── Program.cs
 │
+├── docker-compose.yml      # SQL Server with a persistent volume
+├── DEMO.md                 # step-by-step demo script
 ├── README.md
 └── .gitignore
 ```
@@ -119,23 +122,20 @@ connector-information-gathering-tool/
 - Node.js 20+
 - npm
 - .NET 10 SDK
-- SQL Server 2022 (Local or Docker)
+- Docker Desktop (recommended for SQL Server)
 - Visual Studio Code / Visual Studio 2022
 
 ---
 
 ## Database (SQL Server)
 
-Example Docker setup:
+Start SQL Server with a persistent Docker volume so users and projects survive container restarts:
 
 ```bash
-docker run \
--e "ACCEPT_EULA=Y" \
--e "MSSQL_SA_PASSWORD=StrongPassword@123" \
--p 1433:1433 \
---name cigt-sql \
--d mcr.microsoft.com/mssql/server:2022-latest
+docker compose up -d
 ```
+
+This creates container `cigt-sqlserver` on port `1433` with volume `cigt-sql-data`.
 
 The development connection string is configured in:
 
@@ -143,7 +143,11 @@ The development connection string is configured in:
 API/appsettings.Development.json
 ```
 
-Entity Framework Core migrations run automatically on API startup.
+```
+Server=localhost,1433;Database=cigt;User Id=sa;Password=StrongPassword@123;TrustServerCertificate=True;
+```
+
+Entity Framework Core migrations run automatically on API startup. A database health check is available at `http://localhost:5189/health`.
 
 ---
 
@@ -185,6 +189,31 @@ http://localhost:4200
 
 
 > All users must register using an **@arconnet.com** email address.
+
+Password policy (enforced in the UI and the API):
+
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one digit
+
+A step-by-step demo script is in `DEMO.md`.
+
+## Production configuration
+
+Production values live in environment variables and `API/appsettings.Production.json`. No code change is required to point at a real SQL Server, a production JWT key, a CORS origin, or an absolute uploads folder.
+
+```bash
+ASPNETCORE_ENVIRONMENT=Production
+ConnectionStrings__DefaultConnection=Server=YOUR_SERVER;Database=cigt;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;
+Jwt__Key=your-production-secret-at-least-32-characters-long
+Storage__Provider=Local
+Storage__RootPath=C:\inetpub\cigt\Uploads
+Cors__AllowedOrigins__0=https://your-production-domain.com
+App__FrontendBaseUrl=https://your-production-domain.com
+```
+
+`Storage:Provider` is `Local` today. A cloud backend can be added later by implementing `IFileStorageService` and changing that setting.
 
 ---
 
@@ -236,7 +265,7 @@ Review Screen
 | Version History / Change Requests | ✅ Completed |
 | ASP.NET Core APIs | ✅ Completed |
 | SQL Server + EF Core | ✅ Completed |
-| File Storage (`App_Data`) | ✅ Completed |
+| File Storage (`Uploads/`) | ✅ Completed |
 | PDF Generation | ✅ Completed |
 | Share via Email (.eml) | ✅ Completed |
 | Word Generation | ❌ Removed |
